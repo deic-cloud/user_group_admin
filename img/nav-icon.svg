@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#fff">
+  <!-- spokes -->
+  <rect x="11.25" y="5.5" width="1.5" height="3.5" rx="0.75"/>
+  <rect x="11.25" y="5.5" width="1.5" height="3.5" rx="0.75" transform="rotate(120 12 12)"/>
+  <rect x="11.25" y="5.5" width="1.5" height="3.5" rx="0.75" transform="rotate(240 12 12)"/>
+  <!-- outer member nodes -->
+  <circle cx="12"   cy="3"    r="2.5"/>
+  <circle cx="19.8" cy="16.5" r="2.5"/>
+  <circle cx="4.2"  cy="16.5" r="2.5"/>
+  <!-- center owner node -->
+  <circle cx="12" cy="12" r="3"/>
+</svg>
