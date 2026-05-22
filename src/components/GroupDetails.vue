@@ -77,7 +77,7 @@
 			</p>
 			<NcSelect v-model="editStorageGrant"
 				:options="quotaOptions"
-				:input-label="t('user_group_admin', 'Storage grant')" />
+				:input-label="t('user_group_admin', 'Amount')" />
 
 			<div class="uga-settings-actions">
 				<NcButton variant="primary" @click="saveSettings">{{ t('user_group_admin', 'Save') }}</NcButton>
