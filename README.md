@@ -1,4 +1,4 @@
-# user_group_admin — User-Managed Groups
+# user_group_admin — User-managed groups
 
 Let users create and manage their own Nextcloud groups, with optional storage grants allocated to members.
 
