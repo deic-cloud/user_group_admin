@@ -181,11 +181,13 @@ class InternalController extends Controller {
 		$gid = $data['gid'] ?? '';
 		if ($gid === '') return;
 
+		$isNew = false;
 		try {
 			$group = $this->groupMapper->findByGid($gid);
 		} catch (\OCP\AppFramework\Db\DoesNotExistException) {
 			$group = new Group();
 			$group->setGid($gid);
+			$isNew = true;
 		}
 
 		$group->setOwner($data['owner'] ?? '');
@@ -195,7 +197,7 @@ class InternalController extends Controller {
 		$group->setHidden((bool)($data['hidden'] ?? false));
 		$group->setStorageGrant($data['storage_grant'] ?? '');
 
-		if ($group->getId() === null) {
+		if ($isNew) {
 			$this->groupMapper->insert($group);
 			$this->groupManager->createGroup($gid);
 		} else {

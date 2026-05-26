@@ -88,13 +88,16 @@ class GroupController extends OCSController {
 	#[NoAdminRequired]
 	public function updateGroup(
 		string  $gid,
-		?string $description  = null,
-		?bool   $private      = null,
-		?bool   $open         = null,
-		?string $storageGrant = null,
+		?string $description          = null,
+		?bool   $private              = null,
+		?bool   $open                 = null,
+		?string $storage_grant        = null,
+		?string $storage_grant_total  = null,
 	): DataResponse {
 		try {
-			$group = $this->groupService->updateGroup($this->uid(), $gid, $description, $private, $open, $storageGrant);
+			$group = $this->groupService->updateGroup(
+				$this->uid(), $gid, $description, $private, $open, $storage_grant, $storage_grant_total
+			);
 			return $this->ok($group->toArray());
 		} catch (\RuntimeException $e) {
 			return $this->err($e->getMessage());

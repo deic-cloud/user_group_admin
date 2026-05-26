@@ -92,6 +92,19 @@ class GroupMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
+	/** @return Group[] groups with a storage_grant where the user is an accepted member */
+	public function findGrantGroupsForMember(string $uid): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('g.*')
+		   ->from($this->getTableName(), 'g')
+		   ->innerJoin('g', 'uga_group_members', 'm', $qb->expr()->eq('g.gid', 'm.gid'))
+		   ->where($qb->expr()->eq('m.uid', $qb->createNamedParameter($uid)))
+		   ->andWhere($qb->expr()->eq('m.status', $qb->createNamedParameter(GroupMember::STATUS_ACCEPTED, IQueryBuilder::PARAM_INT)))
+		   ->andWhere($qb->expr()->neq('g.storage_grant', $qb->createNamedParameter('')))
+		   ->andWhere($qb->expr()->isNotNull('g.storage_grant'));
+		return $this->findEntities($qb);
+	}
+
 	/** @return Group[] all groups including hidden (for silo sync) */
 	public function findAll(): array {
 		$qb = $this->db->getQueryBuilder();
@@ -108,7 +121,8 @@ class GroupMapper extends QBMapper {
 		   ->set('private',       $qb->createNamedParameter($entity->getPrivate(), IQueryBuilder::PARAM_BOOL))
 		   ->set('open',          $qb->createNamedParameter($entity->getOpen(), IQueryBuilder::PARAM_BOOL))
 		   ->set('hidden',        $qb->createNamedParameter($entity->getHidden(), IQueryBuilder::PARAM_BOOL))
-		   ->set('storage_grant', $qb->createNamedParameter($entity->getStorageGrant()))
+		   ->set('storage_grant',       $qb->createNamedParameter($entity->getStorageGrant()))
+		   ->set('storage_grant_total', $qb->createNamedParameter($entity->getStorageGrantTotal()))
 		   ->where($qb->expr()->eq('gid', $qb->createNamedParameter($entity->getGid())))
 		   ->executeStatement();
 		return $entity;

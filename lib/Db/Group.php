@@ -21,17 +21,20 @@ use OCP\AppFramework\Db\Entity;
  * @method void   setHidden(bool $hidden)
  * @method string getStorageGrant()
  * @method void   setStorageGrant(string $storageGrant)
+ * @method string getStorageGrantTotal()
+ * @method void   setStorageGrantTotal(string $storageGrantTotal)
  */
 class Group extends Entity {
 	public const HIDDEN_OWNER = 'uga_hidden_owner';
 
-	protected string $gid          = '';
-	protected string $owner        = '';
-	protected string $description  = '';
-	protected bool   $private      = false;
-	protected bool   $open         = false;
-	protected bool   $hidden       = false;
-	protected string $storageGrant = '';
+	protected string $gid               = '';
+	protected string $owner             = '';
+	protected string $description       = '';
+	protected bool   $private           = false;
+	protected bool   $open              = false;
+	protected bool   $hidden            = false;
+	protected string $storageGrant      = '';
+	protected string $storageGrantTotal = '';
 
 	public function __construct() {
 		$this->addType('private',      'boolean');
@@ -41,13 +44,14 @@ class Group extends Entity {
 
 	public function toArray(): array {
 		return [
-			'gid'           => $this->gid,
-			'owner'         => $this->owner,
-			'description'   => $this->description,
-			'private'       => $this->private,
-			'open'          => $this->open,
-			'hidden'        => $this->hidden,
-			'storage_grant' => $this->storageGrant,
+			'gid'                 => $this->gid,
+			'owner'               => $this->owner,
+			'description'         => $this->description,
+			'private'             => $this->private,
+			'open'                => $this->open,
+			'hidden'              => $this->hidden,
+			'storage_grant'       => $this->storageGrant,
+			'storage_grant_total' => $this->storageGrantTotal,
 		];
 	}
 }

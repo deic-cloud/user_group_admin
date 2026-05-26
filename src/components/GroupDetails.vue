@@ -77,7 +77,10 @@
 			</p>
 			<NcSelect v-model="editStorageGrant"
 				:options="quotaOptions"
-				:input-label="t('user_group_admin', 'Amount')" />
+				:input-label="t('user_group_admin', 'Per-member quota')" />
+			<NcSelect v-model="editStorageGrantTotal"
+				:options="quotaTotalOptions"
+				:input-label="t('user_group_admin', 'Total quota (all members)')" />
 
 			<div class="uga-settings-actions">
 				<NcButton variant="primary" @click="saveSettings">{{ t('user_group_admin', 'Save') }}</NcButton>
@@ -106,19 +109,22 @@ const props = defineProps({
 const emit = defineEmits(['updated', 'deleted'])
 
 const OCS = '/ocs/v2.php/apps/user_group_admin/api/v1'
-const QUOTA_OPTIONS = ['1 GB', '5 GB', '10 GB', '20 GB', '50 GB', '100 GB', 'none']
+const QUOTA_OPTIONS       = ['1 GB', '5 GB', '10 GB', '20 GB', '50 GB', '100 GB', 'none']
+const QUOTA_TOTAL_OPTIONS = ['10 GB', '50 GB', '100 GB', '250 GB', '500 GB', '1 TB', 'none']
 
-const members          = ref([])
-const activeTab        = ref('members')
-const inviteUser       = ref(null)
-const userOptions      = ref([])
-const searchingUsers   = ref(false)
-const inviteError      = ref('')
-const editDescription  = ref('')
-const editOpen         = ref(false)
-const editPrivate      = ref(false)
-const editStorageGrant = ref('none')
-const quotaOptions     = QUOTA_OPTIONS.map(v => ({ id: v, label: v }))
+const members               = ref([])
+const activeTab             = ref('members')
+const inviteUser            = ref(null)
+const userOptions           = ref([])
+const searchingUsers        = ref(false)
+const inviteError           = ref('')
+const editDescription       = ref('')
+const editOpen              = ref(false)
+const editPrivate           = ref(false)
+const editStorageGrant      = ref('none')
+const editStorageGrantTotal = ref('none')
+const quotaOptions          = QUOTA_OPTIONS.map(v => ({ id: v, label: v }))
+const quotaTotalOptions     = QUOTA_TOTAL_OPTIONS.map(v => ({ id: v, label: v }))
 
 const STATUS_LABELS = {
 	[-1]: t('user_group_admin', 'Invited'),
@@ -141,7 +147,10 @@ async function loadGroup() {
 	editDescription.value  = g.description ?? ''
 	editOpen.value         = !!g.open
 	editPrivate.value      = !!g.private
-	editStorageGrant.value = g.storage_grant || 'none'
+	const grantId = g.storage_grant || 'none'
+	editStorageGrant.value = quotaOptions.find(o => o.id === grantId) ?? quotaOptions.at(-1)
+	const totalId = g.storage_grant_total || 'none'
+	editStorageGrantTotal.value = quotaTotalOptions.find(o => o.id === totalId) ?? quotaTotalOptions.at(-1)
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -235,11 +244,14 @@ async function leaveGroup() {
 
 async function saveSettings() {
 	try {
+		const grantVal      = editStorageGrant.value?.id      ?? editStorageGrant.value
+		const grantTotalVal = editStorageGrantTotal.value?.id ?? editStorageGrantTotal.value
 		await axios.put(`${OCS}/groups/${encodeURIComponent(props.gid)}`, {
-			description:   editDescription.value,
-			open:          editOpen.value,
-			private:       editPrivate.value,
-			storage_grant: editStorageGrant.value === 'none' ? '' : editStorageGrant.value,
+			description:         editDescription.value,
+			open:                editOpen.value,
+			private:             editPrivate.value,
+			storage_grant:       grantVal      === 'none' ? '' : (grantVal ?? ''),
+			storage_grant_total: grantTotalVal === 'none' ? '' : (grantTotalVal ?? ''),
 		}, { headers: { 'OCS-APIREQUEST': 'true' } })
 		showSuccess(t('user_group_admin', 'Group updated'))
 		emit('updated')

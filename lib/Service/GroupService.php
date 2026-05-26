@@ -83,13 +83,15 @@ class GroupService {
 		?bool   $private,
 		?bool   $open,
 		?string $storageGrant,
+		?string $storageGrantTotal = null,
 	): Group {
 		$group = $this->getGroupForOwner($callerUid, $gid);
 
-		if ($description !== null) $group->setDescription($description);
-		if ($private     !== null) $group->setPrivate($private);
-		if ($open        !== null) $group->setOpen($open);
-		if ($storageGrant !== null) $group->setStorageGrant($storageGrant);
+		if ($description       !== null) $group->setDescription($description);
+		if ($private           !== null) $group->setPrivate($private);
+		if ($open              !== null) $group->setOpen($open);
+		if ($storageGrant      !== null) $group->setStorageGrant($storageGrant);
+		if ($storageGrantTotal !== null) $group->setStorageGrantTotal($storageGrantTotal);
 
 		$this->groupMapper->update($group);
 		$this->syncService->pushGroupToAllSilos($group, $this->memberMapper->findByGid($gid));
@@ -285,7 +287,7 @@ class GroupService {
 
 	private function getGroupForOwner(string $uid, string $gid): Group {
 		$group = $this->getGroup($gid);
-		if ($group->getOwner() !== $uid) {
+		if ($group->getOwner() !== $uid && !$this->groupManager->isAdmin($uid)) {
 			throw new \RuntimeException('Only the group owner can perform this operation');
 		}
 		return $group;
