@@ -93,10 +93,11 @@ class GroupController extends OCSController {
 		?bool   $open                 = null,
 		?string $storage_grant        = null,
 		?string $storage_grant_total  = null,
+		?bool   $grant_sync_hide      = null,
 	): DataResponse {
 		try {
 			$group = $this->groupService->updateGroup(
-				$this->uid(), $gid, $description, $private, $open, $storage_grant, $storage_grant_total
+				$this->uid(), $gid, $description, $private, $open, $storage_grant, $storage_grant_total, $grant_sync_hide
 			);
 			return $this->ok($group->toArray());
 		} catch (\RuntimeException $e) {

@@ -82,6 +82,11 @@
 				:options="quotaTotalOptions"
 				:input-label="t('user_group_admin', 'Total quota (all members)')" />
 
+			<NcCheckboxRadioSwitch v-model="editGrantSyncHide">
+				{{ t('user_group_admin', 'Hide grant folder from sync clients') }}
+			</NcCheckboxRadioSwitch>
+			<p class="uga-hint">{{ t('user_group_admin', 'When checked, desktop sync clients cannot see or sync the grant folder. Members see a locked entry in their folder visibility settings.') }}</p>
+
 			<div class="uga-settings-actions">
 				<NcButton variant="primary" @click="saveSettings">{{ t('user_group_admin', 'Save') }}</NcButton>
 				<NcButton variant="error" @click="confirmDelete">{{ t('user_group_admin', 'Delete group') }}</NcButton>
@@ -123,6 +128,7 @@ const editOpen              = ref(false)
 const editPrivate           = ref(false)
 const editStorageGrant      = ref('none')
 const editStorageGrantTotal = ref('none')
+const editGrantSyncHide     = ref(true)
 const quotaOptions          = QUOTA_OPTIONS.map(v => ({ id: v, label: v }))
 const quotaTotalOptions     = QUOTA_TOTAL_OPTIONS.map(v => ({ id: v, label: v }))
 
@@ -151,6 +157,7 @@ async function loadGroup() {
 	editStorageGrant.value = quotaOptions.find(o => o.id === grantId) ?? quotaOptions.at(-1)
 	const totalId = g.storage_grant_total || 'none'
 	editStorageGrantTotal.value = quotaTotalOptions.find(o => o.id === totalId) ?? quotaTotalOptions.at(-1)
+	editGrantSyncHide.value = g.grant_sync_hide !== false
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -252,6 +259,7 @@ async function saveSettings() {
 			private:             editPrivate.value,
 			storage_grant:       grantVal      === 'none' ? '' : (grantVal ?? ''),
 			storage_grant_total: grantTotalVal === 'none' ? '' : (grantTotalVal ?? ''),
+			grant_sync_hide:     editGrantSyncHide.value,
 		}, { headers: { 'OCS-APIREQUEST': 'true' } })
 		showSuccess(t('user_group_admin', 'Group updated'))
 		emit('updated')

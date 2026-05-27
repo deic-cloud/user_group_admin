@@ -16,4 +16,10 @@ interface IShardingAdapter {
 	public function getUserServer(string $uid): mixed;
 	/** Assign a user to a server by ID. No-op in standalone mode. */
 	public function setUserServer(string $uid, int $serverId): void;
+
+	/**
+	 * Ensure the .uga_grants sync-hide rule exists (hide=true) or is removed
+	 * (hide=false) for the given user in the folder-visibility system.
+	 */
+	public function setGrantSyncHide(string $uid, bool $hide): void;
 }

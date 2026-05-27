@@ -1,7 +1,7 @@
 /* global OC */
 import axios from '@nextcloud/axios'
 import { getCurrentUser } from '@nextcloud/auth'
-import { DefaultType, File, Folder, Permission, getNavigation, registerFileAction, View } from '@nextcloud/files'
+import { DefaultType, File, Folder, Permission, getNavigation, registerFileAction, registerFileListFilter, View } from '@nextcloud/files'
 import { getDefaultPropfind, parsePermissions } from '@nextcloud/files/dav'
 import { t } from '@nextcloud/l10n'
 import { createClient } from 'webdav'
@@ -9,8 +9,18 @@ import EyeSvg from '@mdi/svg/svg/eye.svg?raw'
 import FolderGroupSvg from '@mdi/svg/svg/folder-account-outline.svg?raw'
 import FolderSvg from '@mdi/svg/svg/folder-outline.svg?raw'
 
-const OCS      = '/ocs/v2.php/apps/user_group_admin/api/v1'
+const OCS       = '/ocs/v2.php/apps/user_group_admin/api/v1'
 const PARENT_ID = 'uga-grants'
+
+// Hide the .uga_grants dotfolder from the normal Files view
+try {
+	registerFileListFilter({
+		id:     'uga-hide-grant-dir',
+		filter: nodes => nodes.filter(n => n.basename !== '.uga_grants'),
+	})
+} catch (e) {
+	console.error('[user_group_admin] Failed to register file list filter', e)
+}
 
 function grantBaseUrl(gid) {
 	return window.location.origin + (OC.webroot || '') + '/remote.php/user_group_admin/' + gid

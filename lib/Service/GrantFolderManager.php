@@ -9,20 +9,26 @@ use OCP\IConfig;
 use Psr\Log\LoggerInterface;
 
 /**
- * Creates per-member grant folders on the member's own silo.
+ * Creates per-member grant folders inside the member's NC files tree.
  *
- * Physical path: {datadirectory}/{memberUid}/user_group_admin/{gid}/
+ * Physical path: {datadirectory}/{memberUid}/files/.uga_grants/{gid}/
  *
- * The folder lives OUTSIDE the member's files/ tree so it never appears in
- * NC's Files view. Space is accounted to the group owner via files_accounting.
- * Members access the folder exclusively through the custom DAV endpoint at
- * /remote.php/user_group_admin/{gid}/.
+ * The .uga_grants parent is a dotfolder (hidden by default in Files UI and
+ * excluded by NC desktop's default sync-exclude pattern for dotfiles).
+ * When files_sharding is installed a locked folder-visibility rule is also
+ * written to files_sharding_folders to enforce server-side sync exclusion.
+ *
+ * The folder lives inside files/ so NC assigns it real fileids, enabling
+ * full metadata support (tags, comments, activity, versions).
  */
 class GrantFolderManager {
+	public const GRANT_DIR = '.uga_grants';
+
 	public function __construct(
-		private GroupMapper     $groupMapper,
-		private IConfig         $config,
-		private LoggerInterface $logger,
+		private GroupMapper       $groupMapper,
+		private IConfig           $config,
+		private IShardingAdapter  $shardingAdapter,
+		private LoggerInterface   $logger,
 	) {}
 
 	public function ensureGrantFolders(string $uid): void {
@@ -39,8 +45,34 @@ class GrantFolderManager {
 			return;
 		}
 
+		if (empty($groups)) {
+			return;
+		}
+
+		$grantParent = $dataDir . '/' . $uid . '/files/' . self::GRANT_DIR;
+		if (!is_dir($grantParent)) {
+			if (!mkdir($grantParent, 0750, true) && !is_dir($grantParent)) {
+				$this->logger->warning('user_group_admin: could not create grant parent ' . $grantParent);
+				return;
+			}
+		}
+
+		$anySyncHide = false;
+
 		foreach ($groups as $group) {
-			$path = $dataDir . '/' . $uid . '/user_group_admin/' . $group->getGid();
+			$gid  = $group->getGid();
+			$path = $grantParent . '/' . $gid;
+
+			// Migrate from old path outside files/ tree if present
+			$oldPath = $dataDir . '/' . $uid . '/user_group_admin/' . $gid;
+			if (!is_dir($path) && is_dir($oldPath)) {
+				if (rename($oldPath, $path)) {
+					$this->logger->info('user_group_admin: migrated grant folder ' . $oldPath . ' → ' . $path);
+				} else {
+					$this->logger->warning('user_group_admin: could not migrate ' . $oldPath . ' → ' . $path);
+				}
+			}
+
 			if (!is_dir($path)) {
 				if (!mkdir($path, 0750, true) && !is_dir($path)) {
 					$this->logger->warning('user_group_admin: could not create grant folder ' . $path);
@@ -48,6 +80,12 @@ class GrantFolderManager {
 				}
 				$this->logger->info('user_group_admin: created grant folder ' . $path);
 			}
+
+			if ($group->getGrantSyncHide()) {
+				$anySyncHide = true;
+			}
 		}
+
+		$this->shardingAdapter->setGrantSyncHide($uid, $anySyncHide);
 	}
 }

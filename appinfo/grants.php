@@ -23,6 +23,7 @@ use OCA\UserGroupAdmin\DAV\NamedDirectory;
 use OCA\UserGroupAdmin\Db\GroupMapper;
 use OCA\UserGroupAdmin\Db\GroupMember;
 use OCA\UserGroupAdmin\Db\GroupMemberMapper;
+use OCA\UserGroupAdmin\Service\GrantFolderManager;
 use OCP\IConfig;
 use OCP\IUserSession;
 use Sabre\DAV\Server;
@@ -110,7 +111,7 @@ $acceptedMembers = $memberMapper->findByGid($gid, GroupMember::STATUS_ACCEPTED);
 // Collect all existing member grant folder paths (used for total-cap check)
 $allMemberPaths = [];
 foreach ($acceptedMembers as $m) {
-	$p = $dataDir . '/' . $m->getUid() . '/user_group_admin/' . $gid;
+	$p = $dataDir . '/' . $m->getUid() . '/files/' . GrantFolderManager::GRANT_DIR . '/' . $gid;
 	if (is_dir($p)) {
 		$allMemberPaths[] = $p;
 	}
@@ -139,7 +140,7 @@ $totalBytes     = uga_parse_bytes($group->getStorageGrantTotal());
 // ── Ensure the grant folder exists for member ─────────────────────────────────
 
 if (!$isOwner) {
-	$memberGrantPath = $dataDir . '/' . $uid . '/user_group_admin/' . $gid;
+	$memberGrantPath = $dataDir . '/' . $uid . '/files/' . GrantFolderManager::GRANT_DIR . '/' . $gid;
 	if (!is_dir($memberGrantPath)) {
 		mkdir($memberGrantPath, 0750, true);
 		$allMemberPaths[] = $memberGrantPath;
@@ -154,7 +155,7 @@ $baseUri = $prefix . $gid . '/';
 if ($isOwner) {
 	$children = [];
 	foreach ($acceptedMembers as $m) {
-		$mPath = $dataDir . '/' . $m->getUid() . '/user_group_admin/' . $gid;
+		$mPath = $dataDir . '/' . $m->getUid() . '/files/' . GrantFolderManager::GRANT_DIR . '/' . $gid;
 		if (is_dir($mPath)) {
 			$children[] = new NamedDirectory($m->getUid(), $mPath);
 		}

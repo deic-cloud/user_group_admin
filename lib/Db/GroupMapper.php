@@ -123,6 +123,7 @@ class GroupMapper extends QBMapper {
 		   ->set('hidden',        $qb->createNamedParameter($entity->getHidden(), IQueryBuilder::PARAM_BOOL))
 		   ->set('storage_grant',       $qb->createNamedParameter($entity->getStorageGrant()))
 		   ->set('storage_grant_total', $qb->createNamedParameter($entity->getStorageGrantTotal()))
+		   ->set('grant_sync_hide',     $qb->createNamedParameter($entity->getGrantSyncHide(), IQueryBuilder::PARAM_BOOL))
 		   ->where($qb->expr()->eq('gid', $qb->createNamedParameter($entity->getGid())))
 		   ->executeStatement();
 		return $entity;

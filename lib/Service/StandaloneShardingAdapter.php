@@ -13,4 +13,7 @@ class StandaloneShardingAdapter implements IShardingAdapter {
 	public function masterUrl(): string                    { return ''; }
 	public function getUserServer(string $uid): mixed      { return null; }
 	public function setUserServer(string $uid, int $serverId): void {}
+
+	/** Sync-hide is a no-op without files_sharding; dotfile convention is the fallback. */
+	public function setGrantSyncHide(string $uid, bool $hide): void {}
 }

@@ -84,6 +84,7 @@ class GroupService {
 		?bool   $open,
 		?string $storageGrant,
 		?string $storageGrantTotal = null,
+		?bool   $grantSyncHide    = null,
 	): Group {
 		$group = $this->getGroupForOwner($callerUid, $gid);
 
@@ -93,8 +94,26 @@ class GroupService {
 		if ($storageGrant      !== null) $group->setStorageGrant($storageGrant);
 		if ($storageGrantTotal !== null) $group->setStorageGrantTotal($storageGrantTotal);
 
+		$syncHideChanged = $grantSyncHide !== null && $grantSyncHide !== $group->getGrantSyncHide();
+		if ($grantSyncHide !== null) $group->setGrantSyncHide($grantSyncHide);
+
 		$this->groupMapper->update($group);
 		$this->syncService->pushGroupToAllSilos($group, $this->memberMapper->findByGid($gid));
+
+		// Propagate sync-hide change to all accepted members
+		if ($syncHideChanged) {
+			$accepted = $this->memberMapper->findByGid($gid, GroupMember::STATUS_ACCEPTED);
+			foreach ($accepted as $member) {
+				$uid = $member->getUid();
+				// Recompute: hide if ANY of this user's grant groups has grantSyncHide=true
+				$userGroups = $this->groupMapper->findGrantGroupsForMember($uid);
+				$anyHide = false;
+				foreach ($userGroups as $g) {
+					if ($g->getGrantSyncHide()) { $anyHide = true; break; }
+				}
+				$this->shardingService->setGrantSyncHide($uid, $anyHide);
+			}
+		}
 
 		return $group;
 	}
