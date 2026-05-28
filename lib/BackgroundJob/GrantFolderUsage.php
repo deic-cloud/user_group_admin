@@ -7,6 +7,7 @@ namespace OCA\UserGroupAdmin\BackgroundJob;
 use OCA\UserGroupAdmin\Db\GroupMapper;
 use OCA\UserGroupAdmin\Db\GroupMember;
 use OCA\UserGroupAdmin\Db\GroupMemberMapper;
+use OCA\UserGroupAdmin\Service\GrantFolderManager;
 use OCP\App\IAppManager;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\TimedJob;
@@ -62,7 +63,7 @@ class GrantFolderUsage extends TimedJob {
 
 			foreach ($members as $member) {
 				$uid  = $member->getUid();
-				$path = $dataDir . '/' . $uid . '/user_group_admin/' . $gid;
+				$path = $dataDir . '/' . $uid . '/files/' . GrantFolderManager::GRANT_DIR . '/' . $gid;
 				$size = $this->dirSize($path);
 				$groupTotal += $size;
 

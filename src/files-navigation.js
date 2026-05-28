@@ -1,7 +1,7 @@
 /* global OC */
 import axios from '@nextcloud/axios'
 import { getCurrentUser } from '@nextcloud/auth'
-import { DefaultType, File, Folder, Permission, getNavigation, registerFileAction, registerFileListFilter, View } from '@nextcloud/files'
+import { DefaultType, File, FileListFilter, Folder, Permission, getNavigation, registerFileAction, registerFileListFilter, View } from '@nextcloud/files'
 import { getDefaultPropfind, parsePermissions } from '@nextcloud/files/dav'
 import { t } from '@nextcloud/l10n'
 import { createClient } from 'webdav'
@@ -9,15 +9,16 @@ import EyeSvg from '@mdi/svg/svg/eye.svg?raw'
 import FolderGroupSvg from '@mdi/svg/svg/folder-account-outline.svg?raw'
 import FolderSvg from '@mdi/svg/svg/folder-outline.svg?raw'
 
-const OCS       = '/ocs/v2.php/apps/user_group_admin/api/v1'
-const PARENT_ID = 'uga-grants'
+const OCS        = '/ocs/v2.php/apps/user_group_admin/api/v1'
+const PARENT_ID  = 'uga-grants'
+const GRANT_DIR  = '.uga_grants'
 
 // Hide the .uga_grants dotfolder from the normal Files view
 try {
-	registerFileListFilter({
-		id:     'uga-hide-grant-dir',
-		filter: nodes => nodes.filter(n => n.basename !== '.uga_grants'),
-	})
+	class HideGrantDirFilter extends FileListFilter {
+		filter(nodes) { return nodes.filter(n => n.basename !== '.uga_grants') }
+	}
+	registerFileListFilter(new HideGrantDirFilter('uga-hide-grant-dir'))
 } catch (e) {
 	console.error('[user_group_admin] Failed to register file list filter', e)
 }
@@ -26,29 +27,44 @@ function grantBaseUrl(gid) {
 	return window.location.origin + (OC.webroot || '') + '/remote.php/user_group_admin/' + gid
 }
 
-/**
- * Build a Folder or File node for our custom DAV endpoint.
- *
- * The @nextcloud/files Node class only treats URLs matching
- * /(remote|public)\.php\/(web)?dav/ as DAV resources; anything else
- * returns Permission.READ regardless of oc:permissions. We pass a
- * per-group davService regex so the node class honours our permissions
- * and allows uploads.
- */
-function resultToGrantNode(node, base, gid) {
-	const escapedGid = gid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-	const davService = new RegExp('remote\\.php\\/user_group_admin\\/' + escapedGid)
+function memberDavBase(gid) {
+	// Standard NC DAV path for the current user's grant folder.
+	// Using this as the file source keeps chunked uploads inside /remote.php/dav/
+	// so NC's QuotaPlugin can validate the Destination header without throwing.
+	const uid = getCurrentUser()?.uid ?? ''
+	return window.location.origin + (OC.webroot || '')
+		+ '/remote.php/dav/files/' + encodeURIComponent(uid)
+		+ '/' + GRANT_DIR + '/' + encodeURIComponent(gid)
+}
 
-	const userId     = getCurrentUser()?.uid
-	const props      = node.props ?? {}
-	const id         = props.fileid ? Number(props.fileid) : 0
+/**
+ * Build a Folder or File node for a grant folder.
+ *
+ * isOwner=false (member): source uses the standard /remote.php/dav/ URL so that
+ * @nextcloud/upload's chunked upload Destination header stays within the DAV tree
+ * and NC's QuotaPlugin doesn't throw when calculating free space.
+ *
+ * isOwner=true: source uses the custom grant endpoint (the owner browses other
+ * members' home dirs via the grant proxy; those paths don't exist in the owner's
+ * standard DAV tree).
+ */
+function resultToGrantNode(node, base, gid, isOwner) {
+	const fileBase   = isOwner ? base : memberDavBase(gid)
+	// Standard DAV regex for member nodes; custom regex for owner nodes.
+	const davService = isOwner
+		? new RegExp('remote\\.php\\/user_group_admin\\/' + gid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+		: /remote\.php\/(web)?dav/
+
+	const userId      = getCurrentUser()?.uid
+	const props       = node.props ?? {}
+	const id          = props.fileid ? Number(props.fileid) : 0
 	const permissions = parsePermissions(props.permissions ?? '')
-	const mtime      = new Date(Date.parse(node.lastmod))
-	const crtime     = props.creationdate ? new Date(Date.parse(props.creationdate)) : undefined
+	const mtime       = new Date(Date.parse(node.lastmod))
+	const crtime      = props.creationdate ? new Date(Date.parse(props.creationdate)) : undefined
 
 	const nodeData = {
 		id,
-		source:      base + node.filename,
+		source:      fileBase + node.filename,
 		mtime:       !isNaN(mtime.getTime()) && mtime.getTime() !== 0 ? mtime : undefined,
 		crtime:      crtime && !isNaN(crtime.getTime()) ? crtime : undefined,
 		mime:        node.mime || 'application/octet-stream',
@@ -56,7 +72,12 @@ function resultToGrantNode(node, base, gid) {
 		size:        props.size || parseInt(props.getcontentlength || '0'),
 		permissions,
 		owner:       userId,
-		root:        '/',
+		// For member nodes the source is a standard /remote.php/dav URL, so root
+		// must be the full path up to the grant folder so that node.path resolves
+		// to a grant-endpoint-relative path (e.g. '/' or '/subfolder').
+		// DragAndDropNotice calls view.getContents(currentFolder.path) and that
+		// path must be usable as the davPath argument inside getGrantContents.
+		root:        isOwner ? '/' : '/files/' + (userId ?? '') + '/' + GRANT_DIR + '/' + gid,
 		attributes:  {
 			...node,
 			...props,
@@ -70,9 +91,23 @@ function resultToGrantNode(node, base, gid) {
 		: new Folder(nodeData, davService)
 }
 
-async function getGrantContents(gid, path, options) {
-	const base    = grantBaseUrl(gid)
-	const client  = createClient(base)
+async function getGrantContents(gid, path, options, isOwner = false) {
+	// Strip stale .uga_grants/{gid} prefix (DragAndDropNotice may pass currentFolder.path
+	// from a node built by an older bundle where root was wrong, producing the wrong path).
+	// decodeURIComponent can throw on invalid %XX sequences — keeps the try-catch alive.
+	try {
+		const decoded  = decodeURIComponent(path || '')
+		const grantRoot = '/' + GRANT_DIR + '/' + gid
+		if (decoded && decoded.includes(grantRoot)) {
+			path = decoded.slice(decoded.indexOf(grantRoot) + grantRoot.length) || '/'
+		}
+	} catch (e) { /* ignore */ }
+
+	// Owner view must use the custom grant endpoint (owner can't browse members'
+	// files via standard DAV).  Member view uses the standard NC DAV path so that
+	// PROPFIND returns real oc_filecache fileids — needed for systemtags, shares, etc.
+	const base    = isOwner ? grantBaseUrl(gid) : memberDavBase(gid)
+	const client  = createClient(base, { headers: { requesttoken: OC.requestToken } })
 	const davPath = (!path || path === '/') ? '/' : path
 
 	const resp = await client.getDirectoryContents(davPath, {
@@ -87,8 +122,8 @@ async function getGrantContents(gid, path, options) {
 	const contents = all.filter(f => f !== rootItem)
 
 	return {
-		folder:   resultToGrantNode(rootItem, base, gid),
-		contents: contents.map(f => resultToGrantNode(f, base, gid)),
+		folder:   resultToGrantNode(rootItem, base, gid, isOwner),
+		contents: contents.map(f => resultToGrantNode(f, base, gid, isOwner)),
 	}
 }
 
@@ -115,13 +150,21 @@ try {
 		},
 		exec: async ({ nodes }) => {
 			const node = nodes[0]
-			// Pass a plain object so prototype-only getters (path→filename)
-			// are included and the viewer's extractFilePaths() doesn't crash.
+			// Derive the viewer filename from source, not node.path.
+			// node.path with root='/' returns /files/{uid}/... (the full path after
+			// the DAV service marker), but the viewer expects a path relative to
+			// /remote.php/dav/files/{uid}/ so it can list siblings via standard DAV.
+			const uid       = getCurrentUser()?.uid ?? ''
+			const davPrefix = '/remote.php/dav/files/' + encodeURIComponent(uid)
+			const srcPath   = new URL(node.source).pathname
+			const filename  = srcPath.includes(davPrefix)
+				? srcPath.slice(srcPath.indexOf(davPrefix) + davPrefix.length) || '/'
+				: node.path || '/'
 			window.OCA.Viewer.open({
 				fileInfo: {
 					fileid:      node.fileid,
 					source:      node.source,
-					filename:    node.path || '/',
+					filename,
 					basename:    node.basename,
 					mime:        node.mime,
 					size:        node.size,
@@ -142,6 +185,8 @@ const GROUPS_CACHE_KEY = 'uga_grant_groups_v1'
 let   grantGroups      = []
 
 function registerGroupView(group) {
+	const isOwner  = getCurrentUser()?.uid === group.owner
+	const grantRoot = '/' + GRANT_DIR + '/' + group.gid
 	Navigation.register(new View({
 		id:          `uga-grant-${group.gid}`,
 		name:        group.gid,
@@ -149,7 +194,16 @@ function registerGroupView(group) {
 		icon:        FolderSvg,
 		order:       0,
 		parent:      PARENT_ID,
-		getContents: (path, options) => getGrantContents(group.gid, path || '/', options),
+		getContents: (path, options) => {
+			// Strip stale grantRoot prefix. decodeURIComponent may throw — keeps try-catch.
+			try {
+				const decoded = decodeURIComponent(path || '')
+				if (decoded && decoded.includes(grantRoot)) {
+					path = decoded.slice(decoded.indexOf(grantRoot) + grantRoot.length) || '/'
+				}
+			} catch (e) { /* ignore */ }
+			return getGrantContents(group.gid, path || '/', options, isOwner)
+		},
 	}))
 }
 
@@ -186,7 +240,9 @@ Navigation.register(new View({
 		const parts   = path.replace(/^\//, '').split('/')
 		const gid     = parts[0]
 		const subPath = '/' + parts.slice(1).join('/')
-		return getGrantContents(gid, subPath || '/', options)
+		const grp     = grantGroups.find(g => g.gid === gid)
+		const isOwner = getCurrentUser()?.uid === grp?.owner
+		return getGrantContents(gid, subPath || '/', options, isOwner)
 	},
 }))
 
