@@ -11,12 +11,12 @@ import FolderSvg from '@mdi/svg/svg/folder-outline.svg?raw'
 
 const OCS        = '/ocs/v2.php/apps/user_group_admin/api/v1'
 const PARENT_ID  = 'uga-grants'
-const GRANT_DIR  = '.uga_grants'
+const GRANT_DIR  = 'Grants'
 
-// Hide the .uga_grants dotfolder from the normal Files view
+// Hide the Grants folder from the normal Files view
 try {
 	class HideGrantDirFilter extends FileListFilter {
-		filter(nodes) { return nodes.filter(n => n.basename !== '.uga_grants') }
+		filter(nodes) { return nodes.filter(n => n.basename !== 'Grants' && n.basename !== '.uga_grants') }
 	}
 	registerFileListFilter(new HideGrantDirFilter('uga-hide-grant-dir'))
 } catch (e) {
@@ -72,12 +72,10 @@ function resultToGrantNode(node, base, gid, isOwner) {
 		size:        props.size || parseInt(props.getcontentlength || '0'),
 		permissions,
 		owner:       userId,
-		// For member nodes the source is a standard /remote.php/dav URL, so root
-		// must be the full path up to the grant folder so that node.path resolves
-		// to a grant-endpoint-relative path (e.g. '/' or '/subfolder').
-		// DragAndDropNotice calls view.getContents(currentFolder.path) and that
-		// path must be usable as the davPath argument inside getGrantContents.
-		root:        isOwner ? '/' : '/files/' + (userId ?? '') + '/' + GRANT_DIR + '/' + gid,
+		// root = user's files root so node.path = '/.uga_grants/{gid}/file.jpg',
+		// which is what the OCS shares/tags APIs expect.
+		// getContents strips the /.uga_grants/{gid} prefix before the DAV call.
+		root:        isOwner ? '/' : '/files/' + (userId ?? ''),
 		attributes:  {
 			...node,
 			...props,

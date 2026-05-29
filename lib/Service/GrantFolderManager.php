@@ -11,10 +11,9 @@ use Psr\Log\LoggerInterface;
 /**
  * Creates per-member grant folders inside the member's NC files tree.
  *
- * Physical path: {datadirectory}/{memberUid}/files/.uga_grants/{gid}/
+ * Physical path: {datadirectory}/{memberUid}/files/Grants/{gid}/
  *
- * The .uga_grants parent is a dotfolder (hidden by default in Files UI and
- * excluded by NC desktop's default sync-exclude pattern for dotfiles).
+ * The Grants parent is hidden from the normal Files view by HideGrantDirFilter.
  * When files_sharding is installed a locked folder-visibility rule is also
  * written to files_sharding_folders to enforce server-side sync exclusion.
  *
@@ -22,7 +21,7 @@ use Psr\Log\LoggerInterface;
  * full metadata support (tags, comments, activity, versions).
  */
 class GrantFolderManager {
-	public const GRANT_DIR = '.uga_grants';
+	public const GRANT_DIR = 'Grants';
 
 	public function __construct(
 		private GroupMapper       $groupMapper,
@@ -50,6 +49,17 @@ class GrantFolderManager {
 		}
 
 		$grantParent = $dataDir . '/' . $uid . '/files/' . self::GRANT_DIR;
+
+		// One-time migration: rename legacy .uga_grants → Grants
+		$oldParent = $dataDir . '/' . $uid . '/files/.uga_grants';
+		if (!is_dir($grantParent) && is_dir($oldParent)) {
+			if (rename($oldParent, $grantParent)) {
+				$this->logger->info('user_group_admin: migrated grant parent ' . $oldParent . ' → ' . $grantParent);
+			} else {
+				$this->logger->warning('user_group_admin: could not migrate grant parent ' . $oldParent . ' → ' . $grantParent);
+			}
+		}
+
 		if (!is_dir($grantParent)) {
 			if (!mkdir($grantParent, 0750, true) && !is_dir($grantParent)) {
 				$this->logger->warning('user_group_admin: could not create grant parent ' . $grantParent);
