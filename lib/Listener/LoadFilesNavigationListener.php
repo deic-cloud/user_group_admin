@@ -26,6 +26,7 @@ class LoadFilesNavigationListener implements IEventListener {
 		if ($user !== null) {
 			$this->grantFolderManager->ensureGrantFolders($user->getUID());
 		}
+		Util::addInitScript('user_group_admin', 'files-navigation-init');
 		Util::addScript('user_group_admin', 'files-navigation', 'files');
 	}
 }

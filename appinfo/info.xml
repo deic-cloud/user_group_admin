@@ -5,7 +5,7 @@
 	<name>Groups</name>
 	<summary>User-managed groups with storage grants and external collaborator invitations</summary>
 	<description>Lets users create and manage their own groups, invite external collaborators by email, and delegate storage to group members from their own quota.</description>
-	<version>1.0.3</version>
+	<version>1.0.4</version>
 	<licence>agpl</licence>
 	<author mail="fror@dtu.dk">Frederik Orellana, DTU</author>
 	<namespace>UserGroupAdmin</namespace>

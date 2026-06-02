@@ -1,5 +1,7 @@
 const path = require('path')
+const webpack = require('webpack')
 const { VueLoaderPlugin } = require('vue-loader')
+const { name: appName, version: appVersion } = require('./package.json')
 
 module.exports = (env, argv) => {
 	const isDev = argv.mode === 'development'
@@ -7,8 +9,9 @@ module.exports = (env, argv) => {
 		mode:    isDev ? 'development' : 'production',
 		devtool: isDev ? 'cheap-source-map' : false,
 		entry: {
-			'main':             path.join(__dirname, 'src', 'main.js'),
-			'files-navigation': path.join(__dirname, 'src', 'files-navigation.js'),
+			'main':                  path.join(__dirname, 'src', 'main.js'),
+			'files-navigation':      path.join(__dirname, 'src', 'files-navigation.js'),
+			'files-navigation-init': path.join(__dirname, 'src', 'files-navigation-init.js'),
 		},
 		output: {
 			path:     path.join(__dirname, 'js'),
@@ -31,6 +34,7 @@ module.exports = (env, argv) => {
 				},
 				{
 					test: /\.(svg|png|jpg|gif|woff2?|eot|ttf)$/,
+					resourceQuery: { not: [/raw/] },
 					type: 'asset/inline',
 				},
 				{
@@ -48,9 +52,12 @@ module.exports = (env, argv) => {
 				},
 			],
 		},
-		plugins: [new VueLoaderPlugin()],
+		plugins: [
+			new VueLoaderPlugin(),
+			new webpack.DefinePlugin({ appName: JSON.stringify(appName) }),
+			new webpack.DefinePlugin({ appVersion: JSON.stringify(appVersion) }),
+		],
 		externals: {
-			vue: 'Vue',
 			OC:  'OC',
 			OCA: 'OCA',
 			OCP: 'OCP',

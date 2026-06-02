@@ -6,17 +6,17 @@ import { getDefaultPropfind, parsePermissions } from '@nextcloud/files/dav'
 import { t } from '@nextcloud/l10n'
 import { createClient } from 'webdav'
 import EyeSvg from '@mdi/svg/svg/eye.svg?raw'
-import FolderGroupSvg from '@mdi/svg/svg/folder-account-outline.svg?raw'
+import GiftSvg from '@mdi/svg/svg/gift-outline.svg?raw'
 import FolderSvg from '@mdi/svg/svg/folder-outline.svg?raw'
 
 const OCS        = '/ocs/v2.php/apps/user_group_admin/api/v1'
 const PARENT_ID  = 'uga-grants'
-const GRANT_DIR  = 'Grants'
+const GRANT_DIR  = '.uga_grants'
 
-// Hide the Grants folder from the normal Files view
+// Hide the .uga_grants dotfolder from the normal Files view (also catches legacy 'Grants')
 try {
 	class HideGrantDirFilter extends FileListFilter {
-		filter(nodes) { return nodes.filter(n => n.basename !== 'Grants' && n.basename !== '.uga_grants') }
+		filter(nodes) { return nodes.filter(n => n.basename !== '.uga_grants' && n.basename !== 'Grants') }
 	}
 	registerFileListFilter(new HideGrantDirFilter('uga-hide-grant-dir'))
 } catch (e) {
@@ -46,13 +46,14 @@ function memberDavBase(gid) {
  *
  * isOwner=true: source uses the custom grant endpoint (the owner browses other
  * members' home dirs via the grant proxy; those paths don't exist in the owner's
- * standard DAV tree).
+ * standard DAV tree). The davService regex strips only up to 'user_group_admin/'
+ * so that node.path includes /{gid}/{memberUid}/... — needed for navigation in
+ * the parent 'uga-grants' view where getContents parses /{gid} from path[0].
  */
 function resultToGrantNode(node, base, gid, isOwner) {
 	const fileBase   = isOwner ? base : memberDavBase(gid)
-	// Standard DAV regex for member nodes; custom regex for owner nodes.
 	const davService = isOwner
-		? new RegExp('remote\\.php\\/user_group_admin\\/' + gid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+		? /remote\.php\/user_group_admin\//
 		: /remote\.php\/(web)?dav/
 
 	const userId      = getCurrentUser()?.uid
@@ -90,9 +91,7 @@ function resultToGrantNode(node, base, gid, isOwner) {
 }
 
 async function getGrantContents(gid, path, options, isOwner = false) {
-	// Strip stale .uga_grants/{gid} prefix (DragAndDropNotice may pass currentFolder.path
-	// from a node built by an older bundle where root was wrong, producing the wrong path).
-	// decodeURIComponent can throw on invalid %XX sequences — keeps the try-catch alive.
+	// Strip stale /.uga_grants/{gid} prefix. decodeURIComponent can throw — keeps try-catch.
 	try {
 		const decoded  = decodeURIComponent(path || '')
 		const grantRoot = '/' + GRANT_DIR + '/' + gid
@@ -192,6 +191,12 @@ function registerGroupView(group) {
 		icon:        FolderSvg,
 		order:       0,
 		parent:      PARENT_ID,
+		// Link sidebar item to parent view URL (/apps/files/uga-grants?dir=/{gid}).
+		// FilesNavigation.vue's param-matching then returns THIS child view as the
+		// active navigation view (for sidebar highlighting), while the active app
+		// view stays 'uga-grants' — so currentNavigationViewId is never undefined
+		// even when 'uga-grant-{gid}' is not yet registered on a cold reload.
+		params:      { view: PARENT_ID, dir: '/' + group.gid },
 		getContents: (path, options) => {
 			// Strip stale grantRoot prefix. decodeURIComponent may throw — keeps try-catch.
 			try {
@@ -209,9 +214,9 @@ Navigation.register(new View({
 	id:            PARENT_ID,
 	name:          t('user_group_admin', 'Grants'),
 	caption:       t('user_group_admin', 'Group storage grants'),
-	emptyTitle:    t('user_group_admin', 'No grants'),
-	emptyCaption:  t('user_group_admin', 'You have no group storage grants assigned yet.'),
-	icon:          FolderGroupSvg,
+	emptyTitle:    t('user_group_admin', 'No files'),
+	emptyCaption:  t('user_group_admin', 'This folder is empty.'),
+	icon:          GiftSvg,
 	order:         25,
 	getContents:   async (path, options) => {
 		if (!path || path === '/') {
@@ -253,6 +258,46 @@ try {
 		registerGroupView(group)
 	}
 } catch (e) { /* ignore corrupt cache */ }
+
+// Restore navigation target that was temporarily redirected to 'files' by the
+// files-navigation-init.js init script to prevent a crash in NC core's
+// FilesNavigationListItem.vue on cold reload with a uga-grant* URL.
+;(function restorePendingNavigation() {
+	try {
+		const raw = sessionStorage.getItem('__uga_pending')
+		if (!raw || !window.OCP?.Files?.Router) return
+		const { view, dir } = JSON.parse(raw)
+		sessionStorage.removeItem('__uga_pending')
+		let targetDir = dir
+		if (view !== PARENT_ID) {
+			// uga-grant-{gid} → convert to parent view path /{gid}/{subpath}
+			const gid = view.replace(/^uga-grant-/, '')
+			targetDir = dir === '/' ? '/' + gid : '/' + gid + dir
+		}
+		window.OCP.Files.Router.goToRoute(null, { view: PARENT_ID }, { dir: targetDir })
+	} catch (e) { /* ignore */ }
+})()
+
+// Redirect old /apps/files/uga-grant-{gid}[/fileid][?dir=sub] URLs to the parent
+// view URL scheme (/apps/files/uga-grants?dir=/{gid}[/sub]). This preserves the
+// subpath so deep links survive the redirect. Triggers Vue Router navigation so
+// FilesNavigation.vue re-evaluates currentNavigationViewId with the always-
+// registered parent view — resolving any initial render error caused by the child
+// view not being registered on a first-ever cold reload.
+;(function redirectLegacyGrantUrl() {
+	try {
+		// Match uga-grant-{gid} with an optional /fileid segment after it
+		const m = window.location.pathname.match(/\/apps\/files\/uga-grant-([^/?#/]+)/)
+		if (!m || !window.OCP?.Files?.Router) return
+		const gid = decodeURIComponent(m[1])
+		const queryDir = new URLSearchParams(window.location.search).get('dir') || '/'
+		// Prepend /{gid} to the old ?dir= subpath so the parent view gets the full path
+		const newDir = queryDir === '/' ? '/' + gid : '/' + gid + queryDir
+		// Route without fileid — including a real fileid causes NC to resolve it in the
+		// standard files tree and redirect away from the grant view on reload.
+		window.OCP.Files.Router.goToRoute(null, { view: PARENT_ID }, { dir: newDir })
+	} catch (e) { /* ignore */ }
+})()
 
 // Load grant groups from API, refresh cache, and register any newly added groups
 ;(async () => {

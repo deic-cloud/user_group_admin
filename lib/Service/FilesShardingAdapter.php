@@ -9,7 +9,7 @@ use OCA\FilesSharding\Service\ShardingService;
 
 /** Thin wrapper around ShardingService when files_sharding is installed. */
 class FilesShardingAdapter implements IShardingAdapter {
-	private const GRANT_FOLDER = '/Grants';
+	private const GRANT_FOLDER = '/.uga_grants';
 	private const LOCKED_BY    = 'user_group_admin';
 
 	public function __construct(

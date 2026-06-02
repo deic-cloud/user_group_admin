@@ -18,7 +18,7 @@ use Psr\Log\LoggerInterface;
  * Daily job that recalculates grant folder sizes and reports them to files_accounting.
  *
  * For each group with a storage_grant, iterates over accepted members, measures
- * their {datadirectory}/{uid}/user_group_admin/{gid}/ directory size, and calls
+ * their {datadirectory}/{uid}/files/.uga_grants/{gid}/ directory size, and calls
  * FilesAccounting\Service\StorageService::updateMemberUsage() +
  * FilesAccounting\Service\StorageService::logGrantUsage() so billing is accurate.
  */
