@@ -8,6 +8,7 @@ use OCP\IURLGenerator;
 use OCP\L10N\IFactory;
 use OCP\Notification\INotification;
 use OCP\Notification\INotifier;
+use OCP\Notification\UnknownNotificationException;
 
 class Notifier implements INotifier {
 	public function __construct(
@@ -20,7 +21,7 @@ class Notifier implements INotifier {
 
 	public function prepare(INotification $notification, string $languageCode): INotification {
 		if ($notification->getApp() !== 'user_group_admin') {
-			throw new \InvalidArgumentException('Wrong app');
+			throw new UnknownNotificationException('Wrong app');
 		}
 
 		$l = $this->l10nFactory->get('user_group_admin', $languageCode);
@@ -80,6 +81,6 @@ class Notifier implements INotifier {
 			return $notification;
 		}
 
-		throw new \InvalidArgumentException('Unknown subject');
+		throw new UnknownNotificationException('Unknown subject');
 	}
 }
