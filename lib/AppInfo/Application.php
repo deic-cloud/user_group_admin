@@ -8,13 +8,13 @@ use OCA\DAV\Events\SabrePluginAddEvent;
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\UserGroupAdmin\Activity\Provider as ActivityProvider;
 use OCA\UserGroupAdmin\BackgroundJob\GrantFolderUsage;
-use OCA\UserGroupAdmin\Db\GroupMapper;
 use OCA\UserGroupAdmin\Group\GroupBackend;
 use OCA\UserGroupAdmin\Listener\EnsureGrantFoldersListener;
 use OCA\UserGroupAdmin\Listener\GrantFolderSabreListener;
+use OCA\UserGroupAdmin\Listener\GrantQuotaWrapperListener;
 use OCA\UserGroupAdmin\Listener\LoadFilesNavigationListener;
 use OCA\UserGroupAdmin\Notification\Notifier;
-use OCA\UserGroupAdmin\Storage\GrantQuotaWrapper;
+use OCP\Files\Events\BeforeFileSystemSetupEvent;
 use OCP\User\Events\UserLoggedInEvent;
 use OCP\User\Events\UserLoggedInWithCookieEvent;
 use OCA\UserGroupAdmin\Service\FilesShardingAdapter;
@@ -41,6 +41,7 @@ class Application extends App implements IBootstrap {
 		$context->registerEventListener(UserLoggedInEvent::class, EnsureGrantFoldersListener::class);
 		$context->registerEventListener(UserLoggedInWithCookieEvent::class, EnsureGrantFoldersListener::class);
 		$context->registerEventListener(SabrePluginAddEvent::class, GrantFolderSabreListener::class);
+		$context->registerEventListener(BeforeFileSystemSetupEvent::class, GrantQuotaWrapperListener::class);
 
 		try {
 			$context->registerBackgroundJob(GrantFolderUsage::class);
@@ -71,24 +72,5 @@ class Application extends App implements IBootstrap {
 				->registerProvider(ActivityProvider::class);
 		} catch (\Throwable) {}
 
-		try {
-			$groupMapper = $container->get(GroupMapper::class);
-			\OC\Files\Filesystem::addStorageWrapper(
-				'uga_grant_quota',
-				static function (string $mountPoint, $storage) use ($groupMapper) {
-					// Only wrap simple home mounts (single path component = /{uid}/)
-					$parts = array_values(array_filter(explode('/', $mountPoint)));
-					if (count($parts) !== 1) {
-						return $storage;
-					}
-					return new GrantQuotaWrapper(
-						['storage' => $storage],
-						$parts[0],
-						$groupMapper,
-					);
-				},
-				50
-			);
-		} catch (\Throwable) {}
 	}
 }
