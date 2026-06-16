@@ -239,8 +239,17 @@ Navigation.register(new View({
 			}))
 			return { folder: syntheticRoot, contents: folders }
 		}
-		// User navigated into a grant subfolder via the file list
-		const parts   = path.replace(/^\//, '').split('/')
+		// User navigated into a grant subfolder via the file list — OR core
+		// passed a node's own path (e.g. FileEntryMixin.onDrop), which carries
+		// the /.uga_grants prefix because member nodes use root=/files/{uid} so
+		// OCS shares/tags resolve. Strip that prefix first, otherwise the gid
+		// parses as '.uga_grants' and memberDavBase doubles it
+		// (.uga_grants/.uga_grants/…), 404-ing every drag&drop.
+		let rest = path.replace(/^\//, '')
+		if (rest === GRANT_DIR || rest.startsWith(GRANT_DIR + '/')) {
+			rest = rest.slice(GRANT_DIR.length).replace(/^\//, '')
+		}
+		const parts   = rest.split('/')
 		const gid     = parts[0]
 		const subPath = '/' + parts.slice(1).join('/')
 		const grp     = grantGroups.find(g => g.gid === gid)
