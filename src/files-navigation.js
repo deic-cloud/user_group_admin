@@ -175,6 +175,34 @@ try {
 	console.error('[user_group_admin] Failed to register grant viewer action', e)
 }
 
+// The top-level "Grants" list shows one synthetic Folder per group, with
+// fileid 0 (there's no single real file behind a group). NC's default
+// folder-open routes by fileid, so clicking one navigates to /f/0 → nothing →
+// /apps/files/. Provide a default action for these (PARENT_ID view, falsy
+// fileid) that navigates into the group by dir instead. Real grant subfolders
+// (non-zero fileid) keep NC's normal open behaviour.
+try {
+	registerFileAction({
+		id:            'uga-grant-open-group',
+		displayName:   () => t('user_group_admin', 'Open'),
+		iconSvgInline: () => FolderSvg,
+		default:       DefaultType.DEFAULT,
+		order:         -10,
+		enabled:       ({ nodes, view }) => view?.id === PARENT_ID
+			&& nodes.length === 1
+			&& nodes[0].type === 'folder'
+			&& !nodes[0].fileid,
+		exec: async ({ nodes }) => {
+			if (window.OCP?.Files?.Router) {
+				window.OCP.Files.Router.goToRoute(null, { view: PARENT_ID }, { dir: '/' + nodes[0].basename })
+			}
+			return null
+		},
+	})
+} catch (e) {
+	console.error('[user_group_admin] Failed to register grant open-group action', e)
+}
+
 // ── Navigation registration ───────────────────────────────────────────────────
 
 const Navigation       = getNavigation()
@@ -272,19 +300,38 @@ try {
 // files-navigation-init.js init script to prevent a crash in NC core's
 // FilesNavigationListItem.vue on cold reload with a uga-grant* URL.
 ;(function restorePendingNavigation() {
+	const raw = sessionStorage.getItem('__uga_pending')
+	if (!raw) return
+	let targetDir
 	try {
-		const raw = sessionStorage.getItem('__uga_pending')
-		if (!raw || !window.OCP?.Files?.Router) return
 		const { view, dir } = JSON.parse(raw)
-		sessionStorage.removeItem('__uga_pending')
-		let targetDir = dir
+		targetDir = dir
 		if (view !== PARENT_ID) {
 			// uga-grant-{gid} → convert to parent view path /{gid}/{subpath}
 			const gid = view.replace(/^uga-grant-/, '')
 			targetDir = dir === '/' ? '/' + gid : '/' + gid + dir
 		}
-		window.OCP.Files.Router.goToRoute(null, { view: PARENT_ID }, { dir: targetDir })
-	} catch (e) { /* ignore */ }
+	} catch (e) {
+		sessionStorage.removeItem('__uga_pending')
+		return
+	}
+	// The router may not be mounted yet on a cold reload; poll for it (up to
+	// ~3s) so the restore reliably fires instead of silently dropping — that
+	// drop was what left the raw '.uga_grants' breadcrumb visible.
+	let tries = 0
+	const tick = () => {
+		if (window.OCP?.Files?.Router) {
+			sessionStorage.removeItem('__uga_pending')
+			try {
+				window.OCP.Files.Router.goToRoute(null, { view: PARENT_ID }, { dir: targetDir })
+			} catch (e) { /* ignore */ }
+		} else if (tries++ < 30) {
+			setTimeout(tick, 100)
+		} else {
+			sessionStorage.removeItem('__uga_pending')
+		}
+	}
+	tick()
 })()
 
 // Redirect old /apps/files/uga-grant-{gid}[/fileid][?dir=sub] URLs to the parent
