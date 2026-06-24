@@ -224,7 +224,10 @@ onMounted(loadMyGroups)
 
 <style scoped>
 .uga-main {
+	/* Extra top padding so content (e.g. the create-group form's first field)
+	   clears the floating app-navigation toggle in the top-left corner. */
 	padding: 24px;
+	padding-top: calc(var(--default-clickable-area, 44px) + 8px);
 	max-width: 860px;
 }
 </style>
