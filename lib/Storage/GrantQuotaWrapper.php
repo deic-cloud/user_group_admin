@@ -6,6 +6,7 @@ namespace OCA\UserGroupAdmin\Storage;
 
 use OC\Files\Storage\Wrapper\Wrapper;
 use OCA\UserGroupAdmin\Db\GroupMapper;
+use OCA\UserGroupAdmin\Db\GroupMemberMapper;
 use OCA\UserGroupAdmin\Service\GrantFolderManager;
 use OCP\Files\FileInfo;
 
@@ -16,7 +17,8 @@ use OCP\Files\FileInfo;
  * free_space() is overridden for two scenarios:
  *
  *   1. Path is inside files/.uga_grants/{gid}/
- *      → return grantAllocation - grantUsed  (or SPACE_UNLIMITED if no limit)
+ *      → return min(per-member storage_grant − used, committed storage_grant_total
+ *        − group-wide used)  (or SPACE_UNLIMITED if neither limit is set)
  *
  *   2. Any other path inside files/
  *      → delegate to parent (personal Quota wrapper), then add back the total
@@ -30,6 +32,7 @@ class GrantQuotaWrapper extends Wrapper {
 		array $parameters,
 		private readonly string $uid,
 		private readonly GroupMapper $groupMapper,
+		private readonly GroupMemberMapper $memberMapper,
 	) {
 		parent::__construct($parameters);
 	}
@@ -73,22 +76,50 @@ class GrantQuotaWrapper extends Wrapper {
 		return explode('/', $after)[0];
 	}
 
+	/**
+	 * Free space for a grant subfolder = the tighter of two limits:
+	 *   • per-member  : storage_grant       − this member's live grant usage
+	 *   • committed pool: storage_grant_total − group-wide grant usage
+	 * Either limit is skipped when its figure is unset (0), so a group with only a
+	 * per-member grant behaves exactly as before. SPACE_UNLIMITED if neither is set.
+	 */
 	private function grantFreeSpace(string $gid): float|int {
-		$allocation = $this->grantAllocationBytes($gid);
-		if ($allocation === 0) {
+		$group = $this->findGroup($gid);
+		if ($group === null) {
 			return FileInfo::SPACE_UNLIMITED;
 		}
-		$used = $this->grantUsedBytes($gid);
-		return max(0.0, (float)($allocation - $used));
+		$thisUsed = $this->grantUsedBytes($gid); // live, this member's own folder
+		$limits   = [];
+
+		$perMember = $this->parseBytes($group->getStorageGrant());
+		if ($perMember > 0) {
+			$limits[] = max(0.0, (float)($perMember - $thisUsed));
+		}
+
+		// Committed-pool cap: the owner's total commitment across the whole group.
+		// group-wide used = other accepted members' recorded usage (refreshed daily by
+		// GrantFolderUsage) + THIS member's live usage, so in-request writes count at
+		// once. A node lacking other members' rows just sees a looser pool — never a
+		// false block; the cap tightens as usage is recorded (day granularity).
+		$poolTotal = $this->parseBytes($group->getStorageGrantTotal());
+		if ($poolTotal > 0) {
+			$groupUsed = $this->memberMapper->sumStorageUsedExcept($gid, $this->uid) + $thisUsed;
+			$limits[]  = max(0.0, (float)($poolTotal - $groupUsed));
+		}
+
+		if (empty($limits)) {
+			return FileInfo::SPACE_UNLIMITED;
+		}
+		return (int)min($limits);
 	}
 
-	private function grantAllocationBytes(string $gid): int {
+	private function findGroup(string $gid): ?\OCA\UserGroupAdmin\Db\Group {
 		foreach ($this->loadGrants() as $group) {
 			if ($group->getGid() === $gid) {
-				return $this->parseBytes($group->getStorageGrant());
+				return $group;
 			}
 		}
-		return 0;
+		return null;
 	}
 
 	private function grantUsedBytes(string $gid): int {

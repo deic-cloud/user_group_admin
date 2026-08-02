@@ -51,6 +51,23 @@ class GroupMemberMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
+	/**
+	 * Sum of recorded grant-folder usage (bytes) across the group's accepted members,
+	 * excluding $uid — used to enforce the committed-pool cap (storage_grant_total).
+	 */
+	public function sumStorageUsedExcept(string $gid, string $uid): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->sum('storage_used'))
+		   ->from($this->getTableName())
+		   ->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
+		   ->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(GroupMember::STATUS_ACCEPTED, IQueryBuilder::PARAM_INT)))
+		   ->andWhere($qb->expr()->neq('uid', $qb->createNamedParameter($uid)));
+		$cursor = $qb->executeQuery();
+		$sum = $cursor->fetchOne();
+		$cursor->closeCursor();
+		return (int)$sum;
+	}
+
 	/** @return GroupMember[] accepted memberships for $uid */
 	public function findByUid(string $uid, bool $acceptedOnly = true): array {
 		$qb = $this->db->getQueryBuilder();

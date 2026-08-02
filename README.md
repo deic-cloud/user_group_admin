@@ -57,6 +57,11 @@ The grant is configured in the group's Settings tab:
 > **Storage grant** — Allocate storage from your own quota to group members.  
 > Amount: [dropdown: None / 1 GB / 5 GB / 10 GB / 50 GB / 100 GB / 500 GB / 1 TB]
 
+**Two limits, both enforced by `GrantQuotaWrapper` as a hard write-stop** (507 past the ceiling; existing data untouched):
+
+- **`storage_grant`** — the *per-member* allocation: each member's grant subfolder (`.uga_grants/{gid}/`) is capped at this, independent of their personal quota.
+- **`storage_grant_total`** — the *committed pool*: the owner's total commitment across the whole group. A member's grant free space is `min(per-member remaining, pool remaining)`, where pool usage aggregates every accepted member's recorded `storage_used` (refreshed daily by the `GrantFolderUsage` job) plus the current member's live usage. Unset (`0`) → no pool cap, per-member behaviour only (no regression). Because the aggregate is day-granular and a silo may not hold every member's row, the pool cap is a conservative backstop against over-commitment, not a to-the-byte guarantee — it never *falsely* blocks.
+
 ### Cross-silo sync
 
 When a group is created, updated, or deleted on the master, `files_sharding` propagates the change to all registered silos via `POST /internal/users/{userId}/update` and related endpoints. Silos store a local mirror so group membership is available without a round-trip to the master.
@@ -77,7 +82,8 @@ When a group is created, updated, or deleted on the master, `files_sharding` pro
 | `gid` | varchar | Group identifier |
 | `owner` | varchar | User ID of group owner |
 | `type` | varchar | `invite` / `open` / `private` |
-| `storage_grant` | bigint | Grant size in bytes (0 = none) |
+| `storage_grant` | bigint | Per-member grant size in bytes (0 = none) |
+| `storage_grant_total` | varchar | Committed-pool cap for the whole group (hard write-stop; empty = no pool cap) |
 
 **`user_group_admin_members`**
 
