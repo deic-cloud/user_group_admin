@@ -87,6 +87,13 @@
 			</NcCheckboxRadioSwitch>
 			<p class="uga-hint">{{ t('user_group_admin', 'When checked, desktop sync clients cannot see or sync the grant folder. Members see a locked entry in their folder visibility settings.') }}</p>
 
+			<h3>{{ t('user_group_admin', 'Home-directory top-up') }}</h3>
+			<p class="uga-hint">
+				{{ t('user_group_admin', 'Buy extra free quota on your members\' own home directories, billed to you. Independent of the grant folder above.') }}
+			</p>
+			<NcTextField v-model="editTopup"
+				:label="t('user_group_admin', 'Per-member home top-up (e.g. 100 GB, empty to remove)')" />
+
 			<div class="uga-settings-actions">
 				<NcButton variant="primary" @click="saveSettings">{{ t('user_group_admin', 'Save') }}</NcButton>
 				<NcButton variant="error" @click="confirmDelete">{{ t('user_group_admin', 'Delete group') }}</NcButton>
@@ -114,6 +121,7 @@ const props = defineProps({
 const emit = defineEmits(['updated', 'deleted'])
 
 const OCS = '/ocs/v2.php/apps/user_group_admin/api/v1'
+const FA_OCS = '/ocs/v2.php/apps/files_accounting/api/v1'
 const QUOTA_OPTIONS       = ['1 GB', '5 GB', '10 GB', '20 GB', '50 GB', '100 GB', 'none']
 const QUOTA_TOTAL_OPTIONS = ['10 GB', '50 GB', '100 GB', '250 GB', '500 GB', '1 TB', 'none']
 
@@ -129,6 +137,7 @@ const editPrivate           = ref(false)
 const editStorageGrant      = ref('none')
 const editStorageGrantTotal = ref('none')
 const editGrantSyncHide     = ref(true)
+const editTopup             = ref('')
 const quotaOptions          = QUOTA_OPTIONS.map(v => ({ id: v, label: v }))
 const quotaTotalOptions     = QUOTA_TOTAL_OPTIONS.map(v => ({ id: v, label: v }))
 
@@ -158,6 +167,13 @@ async function loadGroup() {
 	const totalId = g.storage_grant_total || 'none'
 	editStorageGrantTotal.value = quotaTotalOptions.find(o => o.id === totalId) ?? quotaTotalOptions.at(-1)
 	editGrantSyncHide.value = g.grant_sync_hide !== false
+
+	// Home-directory top-up lives in files_accounting (optional app); tolerate absence.
+	try {
+		const { data: tu } = await axios.get(`${FA_OCS}/grouptopup`,
+			{ params: { gid: props.gid }, headers: { 'OCS-APIREQUEST': 'true' } })
+		editTopup.value = (tu.ocs?.data?.bytes > 0) ? (tu.ocs.data.human ?? '') : ''
+	} catch (e) { /* files_accounting unavailable — leave top-up blank */ }
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -261,6 +277,12 @@ async function saveSettings() {
 			storage_grant_total: grantTotalVal === 'none' ? '' : (grantTotalVal ?? ''),
 			grant_sync_hide:     editGrantSyncHide.value,
 		}, { headers: { 'OCS-APIREQUEST': 'true' } })
+		// Save the home-directory top-up via files_accounting (owner self-service).
+		try {
+			await axios.post(`${FA_OCS}/grouptopup`,
+				{ gid: props.gid, quota: (editTopup.value || '').trim() || '0' },
+				{ headers: { 'OCS-APIREQUEST': 'true' } })
+		} catch (e) { /* files_accounting unavailable — group settings still saved */ }
 		showSuccess(t('user_group_admin', 'Group updated'))
 		emit('updated')
 	} catch (e) {

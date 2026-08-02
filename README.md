@@ -62,6 +62,10 @@ The grant is configured in the group's Settings tab:
 - **`storage_grant`** — the *per-member* allocation: each member's grant subfolder (`.uga_grants/{gid}/`) is capped at this, independent of their personal quota.
 - **`storage_grant_total`** — the *committed pool*: the owner's total commitment across the whole group. A member's grant free space is `min(per-member remaining, pool remaining)`, where pool usage aggregates every accepted member's recorded `storage_used` (refreshed daily by the `GrantFolderUsage` job) plus the current member's live usage. Unset (`0`) → no pool cap, per-member behaviour only (no regression). Because the aggregate is day-granular and a silo may not hold every member's row, the pool cap is a conservative backstop against over-commitment, not a to-the-byte guarantee — it never *falsely* blocks.
 
+### Home-directory top-up (self-service)
+
+Separately from the grant *folder*, a group owner can buy extra free quota on their members' **own home directories** (billed to the owner) — the "OneDrive alternative" option. It's set from the same group **Settings** tab ("Home-directory top-up", e.g. `100 GB`, empty to remove) and is stored/enforced by `files_accounting` (`files_accounting_topup`), which raises each member's effective free quota (and native hard-stop). The control calls the `files_accounting` `grouptopup` OCS endpoint, which authorises the **group owner** (not just admins); on a silo the write is forwarded to the master. Hidden gracefully if `files_accounting` is not installed.
+
 ### Cross-silo sync
 
 When a group is created, updated, or deleted on the master, `files_sharding` propagates the change to all registered silos via `POST /internal/users/{userId}/update` and related endpoints. Silos store a local mirror so group membership is available without a round-trip to the master.
