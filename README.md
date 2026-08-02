@@ -64,7 +64,7 @@ The grant is configured in the group's Settings tab:
 
 ### Home-directory top-up (self-service)
 
-Separately from the grant *folder*, a group owner can buy extra free quota on their members' **own home directories** (billed to the owner) — the "OneDrive alternative" option. It's set from the same group **Settings** tab ("Home-directory top-up", e.g. `100 GB`, empty to remove) and is stored/enforced by `files_accounting` (`files_accounting_topup`), which raises each member's effective free quota (and native hard-stop). The control calls the `files_accounting` `grouptopup` OCS endpoint, which authorises the **group owner** (not just admins); on a silo the write is forwarded to the master. Hidden gracefully if `files_accounting` is not installed.
+Separately from the grant *folder*, a group owner can allocate extra free quota on their members' **own home directories**, drawn from their own assigned quota — the "OneDrive alternative" option. It's set from the same group **Settings** tab ("Home-directory top-up", e.g. `100 GB`, empty to remove) and is stored/enforced by `files_accounting` (`files_accounting_topup`), which raises each member's effective free quota (and native hard-stop). The control calls the `files_accounting` `grouptopup` OCS endpoint, which authorises the **group owner** (not just admins); on a silo the write is forwarded to the master. Hidden gracefully if `files_accounting` is not installed.
 
 ### Cross-silo sync
 

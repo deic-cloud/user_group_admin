@@ -89,7 +89,7 @@
 
 			<h3>{{ t('user_group_admin', 'Home-directory top-up') }}</h3>
 			<p class="uga-hint">
-				{{ t('user_group_admin', 'Buy extra free quota on your members\' own home directories, billed to you. Independent of the grant folder above.') }}
+				{{ t('user_group_admin', 'Allocate extra free quota on your members\' own home directories, drawn from your own quota. Independent of the grant folder above.') }}
 			</p>
 			<NcTextField v-model="editTopup"
 				:label="t('user_group_admin', 'Per-member home top-up (e.g. 100 GB, empty to remove)')" />
