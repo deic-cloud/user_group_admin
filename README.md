@@ -119,33 +119,15 @@ All endpoints under `/ocs/v2.php/apps/user_group_admin/api/v1/`. Authentication 
 
 ## Build
 
-The frontend (Vue 2) must be built with webpack via `build/frontend-legacy`. The app's entry point is registered in `build/frontend-legacy/webpack.modules.cjs`:
-
-```js
-user_group_admin: {
-    main: path.join(__dirname, 'apps/user_group_admin/src', 'main.js'),
-},
-```
-
-A symlink must exist at `build/frontend-legacy/apps/user_group_admin` → `../../apps/user_group_admin`.
-
-**Always do a full webpack build** (no `MODULE=` flag) to avoid `splitChunks` producing oversized bundles with wrong initialisation order:
+The frontend is built by the app's **own webpack** (`apps/user_group_admin/webpack.config.js`, `splitChunks: false` so each entry is a self-contained bundle). This keeps the app installable standalone — **no core NC UI rebuild**:
 
 ```bash
-cd /home/claude/code/nextcloud/build/frontend-legacy
-node node_modules/webpack/bin/webpack.js --node-env production
+cd apps/user_group_admin
+npm ci          # first time only
+npm run build   # → apps/user_group_admin/js/{main,files-navigation,files-navigation-init}.js
 ```
 
-Copy the built bundle into the app:
-
-```bash
-mkdir -p /home/claude/code/nextcloud/apps/user_group_admin/js
-cp /home/claude/code/nextcloud/dist/user_group_admin-main.js* \
-   /home/claude/code/nextcloud/apps/user_group_admin/js/
-# Fix source map reference
-sed -i 's|sourceMappingURL=user_group_admin-main.js.map|sourceMappingURL=main.js.map|' \
-   /home/claude/code/nextcloud/apps/user_group_admin/js/main.js
-```
+Nextcloud loads the app's JS from **`apps/user_group_admin/js/`** (via `Util::addScript`). **Do NOT copy the bundle into the core `/dist/`.** A `/dist/user_group_admin-*.js` file *shadows* the shipped `js/` and, because a core `/dist/` entry only exists after a full NC UI build, it breaks app-store installability — if one exists, `rm` it. Commit the built `js/` so git/app-store installs ship it (PHP-only changes need no build).
 
 ## Deployment
 
@@ -163,11 +145,7 @@ rsync -av --delete apps/user_group_admin/ silo2:/var/www/nextcloud/apps/user_gro
 occ app:enable user_group_admin
 ```
 
-After deploying JavaScript changes, reload PHP-FPM to clear OPcache:
-
-```bash
-service php8.3-fpm reload
-```
+Deploy the whole app dir (including the committed `js/`); there is **no `/dist/` step**. After deploying, reload the web/PHP layer to clear OPcache — `service php8.3-fpm reload` on the pods, `service apache24 restart` on the FreeBSD boxes (mod_php). A JS change also needs a browser hard-refresh (the `?v=` asset hash is global, not per-app).
 
 ### Domain grouping (SAML)
 
