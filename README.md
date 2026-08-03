@@ -168,3 +168,7 @@ After deploying JavaScript changes, reload PHP-FPM to clear OPcache:
 ```bash
 service php8.3-fpm reload
 ```
+
+### Domain grouping (SAML)
+
+On login, `EnsureDomainGroupListener` ensures a **hidden** group named after the user's home organisation (the domain part of the `user@homeorg` UID — our SAML `uid_mapping` is eppn, matching the old `schacHomeOrganization`) exists and the user is a member. This gives `files_accounting`'s per-domain billing rollup something to group on, and ports the old ScienceData user_saml behaviour without patching user_saml. The group carries the `HIDDEN_OWNER` sentinel until an admin assigns the institution's real owner at onboarding; ownerless hidden groups are never billed. Bare (non-`@`) UIDs — local accounts — are skipped.
