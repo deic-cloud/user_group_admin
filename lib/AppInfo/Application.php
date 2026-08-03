@@ -9,6 +9,7 @@ use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\UserGroupAdmin\Activity\Provider as ActivityProvider;
 use OCA\UserGroupAdmin\BackgroundJob\GrantFolderUsage;
 use OCA\UserGroupAdmin\Group\GroupBackend;
+use OCA\UserGroupAdmin\Listener\EnsureDomainGroupListener;
 use OCA\UserGroupAdmin\Listener\EnsureGrantFoldersListener;
 use OCA\UserGroupAdmin\Listener\GrantFolderSabreListener;
 use OCA\UserGroupAdmin\Listener\GrantQuotaWrapperListener;
@@ -40,6 +41,8 @@ class Application extends App implements IBootstrap {
 		$context->registerEventListener(LoadAdditionalScriptsEvent::class, LoadFilesNavigationListener::class);
 		$context->registerEventListener(UserLoggedInEvent::class, EnsureGrantFoldersListener::class);
 		$context->registerEventListener(UserLoggedInWithCookieEvent::class, EnsureGrantFoldersListener::class);
+		$context->registerEventListener(UserLoggedInEvent::class, EnsureDomainGroupListener::class);
+		$context->registerEventListener(UserLoggedInWithCookieEvent::class, EnsureDomainGroupListener::class);
 		$context->registerEventListener(SabrePluginAddEvent::class, GrantFolderSabreListener::class);
 		$context->registerEventListener(BeforeFileSystemSetupEvent::class, GrantQuotaWrapperListener::class);
 

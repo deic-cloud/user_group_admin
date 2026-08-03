@@ -75,6 +75,25 @@ class GroupService {
 		return $group;
 	}
 
+	/**
+	 * Ensure the hidden domain group $gid exists and $uid is an accepted member.
+	 * The port of the old user_saml schacHomeOrganization / UID-domain grouping — it
+	 * lands in user_group_admin (uga_groups) so the domain billing rollup has something
+	 * to group on. Idempotent. The group keeps the HIDDEN_OWNER sentinel until an admin
+	 * onboards the institution (assigns a real owner + top-up/grant); ownerless hidden
+	 * groups are never billed.
+	 */
+	public function ensureDomainGroupMembership(string $gid, string $uid): void {
+		$this->createHiddenGroup($gid); // idempotent (returns existing)
+		if (!$this->memberMapper->isMember($gid, $uid)) {
+			$this->addMember($gid, $uid, GroupMember::STATUS_ACCEPTED);
+			$this->syncService->pushGroupToAllSilos(
+				$this->groupMapper->findByGid($gid),
+				$this->memberMapper->findByGid($gid),
+			);
+		}
+	}
+
 	/** @throws \RuntimeException if not found or caller is not owner */
 	public function updateGroup(
 		string  $callerUid,
