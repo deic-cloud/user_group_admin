@@ -12,6 +12,14 @@
 
 		<!-- Members tab -->
 		<div v-if="activeTab === 'members'">
+			<div v-if="pendingOwner === currentUser" class="uga-transfer-offer">
+				<p>{{ t('user_group_admin', 'You have been offered ownership of this group. Accepting makes you responsible for its storage and billing.') }}</p>
+				<div class="uga-transfer-offer__actions">
+					<NcButton variant="primary" @click="acceptOwnership">{{ t('user_group_admin', 'Accept ownership') }}</NcButton>
+					<NcButton @click="declineOwnership">{{ t('user_group_admin', 'Decline') }}</NcButton>
+				</div>
+			</div>
+
 			<h3>{{ t('user_group_admin', 'Members') }}</h3>
 			<ul class="uga-member-list">
 				<li v-for="m in members" :key="m.uid + m.invitation_email" class="uga-member">
@@ -94,6 +102,27 @@
 			<NcTextField v-model="editTopup"
 				:label="t('user_group_admin', 'Per-member home top-up (e.g. 100 GB, empty to remove)')" />
 
+			<h3>{{ t('user_group_admin', 'Transfer ownership') }}</h3>
+			<p class="uga-hint">
+				{{ t('user_group_admin', 'Hand this group — and its storage billing — to another active member. They must accept before it takes effect.') }}
+			</p>
+			<p v-if="pendingOwner" class="uga-hint uga-pending">
+				{{ t('user_group_admin', 'Offer pending with {user}, awaiting their acceptance.', { user: pendingOwner }) }}
+			</p>
+			<div class="uga-add-member">
+				<NcSelect v-model="transferUser"
+					:options="transferOptions"
+					:searchable="true"
+					:placeholder="t('user_group_admin', 'Choose the new owner…')"
+					label="label"
+					track-by="uid"
+					class="uga-user-select" />
+				<NcButton :disabled="!transferUser" @click="initiateTransfer">
+					{{ t('user_group_admin', 'Transfer ownership') }}
+				</NcButton>
+			</div>
+			<p v-if="transferError" class="uga-error">{{ transferError }}</p>
+
 			<div class="uga-settings-actions">
 				<NcButton variant="primary" @click="saveSettings">{{ t('user_group_admin', 'Save') }}</NcButton>
 				<NcButton variant="error" @click="confirmDelete">{{ t('user_group_admin', 'Delete group') }}</NcButton>
@@ -104,7 +133,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import axios from '@nextcloud/axios'
 import { t } from '@nextcloud/l10n'
 import { showError, showSuccess } from '@nextcloud/dialogs'
@@ -138,8 +167,17 @@ const editStorageGrant      = ref('none')
 const editStorageGrantTotal = ref('none')
 const editGrantSyncHide     = ref(true)
 const editTopup             = ref('')
+const pendingOwner          = ref('')
+const transferUser          = ref(null)
+const transferError         = ref('')
 const quotaOptions          = QUOTA_OPTIONS.map(v => ({ id: v, label: v }))
 const quotaTotalOptions     = QUOTA_TOTAL_OPTIONS.map(v => ({ id: v, label: v }))
+
+// Active members (excluding external invites and the current user) — candidates
+// to receive ownership.
+const transferOptions = computed(() => members.value
+	.filter(m => m.status === 1 && m.uid !== 'uga_external' && m.uid !== props.currentUser)
+	.map(m => ({ uid: m.uid, label: m.uid })))
 
 const STATUS_LABELS = {
 	[-1]: t('user_group_admin', 'Invited'),
@@ -167,6 +205,7 @@ async function loadGroup() {
 	const totalId = g.storage_grant_total || 'none'
 	editStorageGrantTotal.value = quotaTotalOptions.find(o => o.id === totalId) ?? quotaTotalOptions.at(-1)
 	editGrantSyncHide.value = g.grant_sync_hide !== false
+	pendingOwner.value      = g.pending_owner ?? ''
 
 	// Home-directory top-up lives in files_accounting (optional app); tolerate absence.
 	try {
@@ -301,7 +340,46 @@ async function confirmDelete() {
 	}
 }
 
-onMounted(() => { loadMembers(); if (props.isOwner) loadGroup() })
+async function initiateTransfer() {
+	if (!transferUser.value) return
+	transferError.value = ''
+	try {
+		await axios.put(`${OCS}/groups/${encodeURIComponent(props.gid)}/owner`,
+			{ uid: transferUser.value.uid },
+			{ headers: { 'OCS-APIREQUEST': 'true' } })
+		showSuccess(t('user_group_admin', 'Ownership offer sent — awaiting acceptance'))
+		transferUser.value = null
+		loadGroup()
+	} catch (e) {
+		transferError.value = e.response?.data?.ocs?.meta?.message ?? t('user_group_admin', 'Transfer failed')
+	}
+}
+
+async function acceptOwnership() {
+	try {
+		await axios.put(`${OCS}/groups/${encodeURIComponent(props.gid)}/owner/pending`,
+			{}, { headers: { 'OCS-APIREQUEST': 'true' } })
+		showSuccess(t('user_group_admin', 'You are now the owner of this group'))
+		pendingOwner.value = ''
+		emit('updated')
+	} catch (e) {
+		showError(e.response?.data?.ocs?.meta?.message ?? t('user_group_admin', 'Failed to accept ownership'))
+	}
+}
+
+async function declineOwnership() {
+	try {
+		await axios.delete(`${OCS}/groups/${encodeURIComponent(props.gid)}/owner/pending`,
+			{ headers: { 'OCS-APIREQUEST': 'true' } })
+		showSuccess(t('user_group_admin', 'Ownership offer declined'))
+		pendingOwner.value = ''
+		emit('updated')
+	} catch (e) {
+		showError(e.response?.data?.ocs?.meta?.message ?? t('user_group_admin', 'Failed to decline'))
+	}
+}
+
+onMounted(() => { loadMembers(); loadGroup() })
 </script>
 
 <style scoped>
@@ -323,5 +401,10 @@ onMounted(() => { loadMembers(); if (props.isOwner) loadGroup() })
 .uga-error { color: var(--color-error); }
 .uga-leave { margin-top: 24px; }
 .uga-hint { font-size: .9em; color: var(--color-text-maxcontrast); margin: 4px 0 8px; }
+.uga-pending { font-style: italic; }
+.uga-transfer-offer { border: 1px solid var(--color-primary-element); background: var(--color-primary-element-light);
+	border-radius: var(--border-radius-large, 8px); padding: 12px 16px; margin-bottom: 16px; }
+.uga-transfer-offer p { margin: 0 0 8px; }
+.uga-transfer-offer__actions { display: flex; gap: 8px; }
 h3 { font-size: 1em; font-weight: 600; margin: 20px 0 8px; }
 </style>

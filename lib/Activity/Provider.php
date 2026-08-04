@@ -33,6 +33,12 @@ class Provider implements IProvider {
 			'join_request_received' => $l->t('%s requested to join your group "%s"', [$p['uid'], $p['gid']]),
 			'join_approved'   => $l->t('You approved %s joining group "%s"',        [$p['uid'], $p['gid']]),
 			'join_approval_received' => $l->t('Your request to join "%s" was approved', [$p['gid']]),
+			'ownership_offered'        => $l->t('You offered ownership of group "%s" to %s',  [$p['gid'], $p['uid']]),
+			'ownership_offer_received' => $l->t('%s offered you ownership of group "%s"',     [$p['inviter'], $p['gid']]),
+			'ownership_accepted'       => $l->t('%s accepted ownership of group "%s"',        [$p['uid'], $p['gid']]),
+			'ownership_declined'       => $l->t('%s declined ownership of group "%s"',        [$p['uid'], $p['gid']]),
+			'ownership_transferred'      => $l->t('You are now the owner of group "%s"',      [$p['gid']]),
+			'ownership_transferred_from' => $l->t('Ownership of group "%s" was transferred to %s', [$p['gid'], $p['uid']]),
 			default           => throw new \InvalidArgumentException('Unknown subject'),
 		});
 

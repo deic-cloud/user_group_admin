@@ -14,8 +14,10 @@ use OCA\UserGroupAdmin\Listener\EnsureGrantFoldersListener;
 use OCA\UserGroupAdmin\Listener\GrantFolderSabreListener;
 use OCA\UserGroupAdmin\Listener\GrantQuotaWrapperListener;
 use OCA\UserGroupAdmin\Listener\LoadFilesNavigationListener;
+use OCA\UserGroupAdmin\Listener\ReassignOwnershipListener;
 use OCA\UserGroupAdmin\Notification\Notifier;
 use OCP\Files\Events\BeforeFileSystemSetupEvent;
+use OCP\User\Events\UserDeletedEvent;
 use OCP\User\Events\UserLoggedInEvent;
 use OCP\User\Events\UserLoggedInWithCookieEvent;
 use OCA\UserGroupAdmin\Service\FilesShardingAdapter;
@@ -43,6 +45,7 @@ class Application extends App implements IBootstrap {
 		$context->registerEventListener(UserLoggedInWithCookieEvent::class, EnsureGrantFoldersListener::class);
 		$context->registerEventListener(UserLoggedInEvent::class, EnsureDomainGroupListener::class);
 		$context->registerEventListener(UserLoggedInWithCookieEvent::class, EnsureDomainGroupListener::class);
+		$context->registerEventListener(UserDeletedEvent::class, ReassignOwnershipListener::class);
 		$context->registerEventListener(SabrePluginAddEvent::class, GrantFolderSabreListener::class);
 		$context->registerEventListener(BeforeFileSystemSetupEvent::class, GrantQuotaWrapperListener::class);
 

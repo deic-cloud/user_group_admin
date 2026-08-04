@@ -165,4 +165,39 @@ class GroupController extends OCSController {
 			return $this->err($e->getMessage());
 		}
 	}
+
+	// ── Ownership transfer ──────────────────────────────────────────────────────
+
+	/** Offer ownership to a new owner (consent flow), or force it as admin ($force). */
+	#[NoAdminRequired]
+	public function transferOwnership(string $gid, string $uid, bool $force = false): DataResponse {
+		try {
+			$group = $this->groupService->transferOwnership($this->uid(), $gid, $uid, $force);
+			return $this->ok($group->toArray());
+		} catch (\RuntimeException $e) {
+			return $this->err($e->getMessage());
+		}
+	}
+
+	/** Proposed owner accepts a pending ownership transfer. */
+	#[NoAdminRequired]
+	public function acceptOwnership(string $gid): DataResponse {
+		try {
+			$this->groupService->respondOwnership($this->uid(), $gid, true);
+			return $this->ok();
+		} catch (\RuntimeException $e) {
+			return $this->err($e->getMessage());
+		}
+	}
+
+	/** Proposed owner declines a pending ownership transfer. */
+	#[NoAdminRequired]
+	public function declineOwnership(string $gid): DataResponse {
+		try {
+			$this->groupService->respondOwnership($this->uid(), $gid, false);
+			return $this->ok();
+		} catch (\RuntimeException $e) {
+			return $this->err($e->getMessage());
+		}
+	}
 }

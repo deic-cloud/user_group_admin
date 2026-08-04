@@ -81,6 +81,32 @@ class Notifier implements INotifier {
 			return $notification;
 		}
 
+		if ($notification->getSubject() === 'ownership_transfer') {
+			$p   = $notification->getSubjectParameters();
+			$gid = $p['gid'];
+
+			$notification->setParsedSubject($l->t('You have been offered ownership of group "%s"', [$gid]));
+			$notification->setParsedMessage($l->t('Offered by %s', [$p['inviter']]));
+
+			$base = '/ocs/v2.php/apps/user_group_admin/api/v1/groups/' . urlencode($gid) . '/owner/pending';
+
+			$accept = $notification->createAction();
+			$accept->setLabel('accept')
+				->setParsedLabel($l->t('Accept'))
+				->setLink($this->urlGenerator->getAbsoluteURL($base), 'PUT')
+				->setPrimary(true);
+			$notification->addParsedAction($accept);
+
+			$decline = $notification->createAction();
+			$decline->setLabel('decline')
+				->setParsedLabel($l->t('Decline'))
+				->setLink($this->urlGenerator->getAbsoluteURL($base), 'DELETE')
+				->setPrimary(false);
+			$notification->addParsedAction($decline);
+
+			return $notification;
+		}
+
 		throw new UnknownNotificationException('Unknown subject');
 	}
 }

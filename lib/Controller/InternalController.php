@@ -196,6 +196,7 @@ class InternalController extends Controller {
 		$group->setOpen((bool)($data['open'] ?? false));
 		$group->setHidden((bool)($data['hidden'] ?? false));
 		$group->setStorageGrant($data['storage_grant'] ?? '');
+		$group->setPendingOwner($data['pending_owner'] ?? '');
 
 		if ($isNew) {
 			$this->groupMapper->insert($group);

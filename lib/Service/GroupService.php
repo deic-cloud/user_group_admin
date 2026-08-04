@@ -152,6 +152,171 @@ class GroupService {
 		$this->publishActivity('group_deleted', ['gid' => $gid], $callerUid, $callerUid);
 	}
 
+	// ── Ownership transfer ──────────────────────────────────────────────────────
+	// The owner is the party billed for a group's top-ups and grant folders, so
+	// ownership can't be handed over silently: a normal transfer records a pending
+	// offer and only takes effect once the recipient accepts. An administrator may
+	// force it (no consent), and the no-orphan path (reassignOwnedGroupsOnUserDeletion)
+	// hands off automatically when an owner's account is deleted.
+	// Because grant folders live per-member (GrantFolderManager), a transfer moves
+	// no data — it is a metadata + billing-pointer change, propagated to all silos.
+
+	/**
+	 * Offer (or, with $force and admin rights, immediately apply) ownership of
+	 * $gid to $newOwnerUid.
+	 *
+	 * @throws \RuntimeException on auth / validation failure
+	 */
+	public function transferOwnership(string $callerUid, string $gid, string $newOwnerUid, bool $force = false): Group {
+		$group   = $this->getGroup($gid);
+		$isAdmin = $this->groupManager->isAdmin($callerUid);
+		$isOwner = $group->getOwner() === $callerUid;
+
+		if (!$isOwner && !$isAdmin) {
+			throw new \RuntimeException('Only the group owner or an administrator can transfer ownership');
+		}
+		// Don't require a *local* user: the new owner may live on another silo.
+		// Realness is enforced by the accepted-membership check below (consent
+		// path); an admin forcing a transfer takes responsibility for the uid.
+		if ($newOwnerUid === '') {
+			throw new \RuntimeException('No proposed owner given');
+		}
+		if ($newOwnerUid === $group->getOwner()) {
+			throw new \RuntimeException('That user already owns this group');
+		}
+
+		// TODO(follow-up): verify the new owner's allocation covers the committed
+		// pool (storage_grant_total) + home top-ups before accepting, or let an
+		// admin override. Tracked in BACKLOG.
+
+		if ($force) {
+			if (!$isAdmin) {
+				throw new \RuntimeException('Only an administrator can transfer ownership without the recipient’s consent');
+			}
+			$this->applyOwnership($group, $newOwnerUid, $callerUid);
+			return $group;
+		}
+
+		// Consent flow: the proposed owner must already be an active member, so
+		// they can see the group and act on the offer. (Admin force bypasses this.)
+		try {
+			if ($this->memberMapper->findByGidUid($gid, $newOwnerUid)->getStatus() !== GroupMember::STATUS_ACCEPTED) {
+				throw new \RuntimeException('The proposed owner must be an active member of the group');
+			}
+		} catch (DoesNotExistException) {
+			throw new \RuntimeException('The proposed owner must be an active member of the group');
+		}
+
+		// Record the offer and notify the proposed owner.
+		$group->setPendingOwner($newOwnerUid);
+		$this->groupMapper->update($group);
+		$this->syncService->pushGroupToAllSilos($group, $this->memberMapper->findByGid($gid));
+		$this->sendOwnershipOfferNotification($gid, $callerUid, $newOwnerUid);
+		$this->publishActivity('ownership_offered',        ['gid' => $gid, 'uid' => $newOwnerUid], $callerUid, $callerUid);
+		$this->publishActivity('ownership_offer_received', ['gid' => $gid, 'inviter' => $callerUid], $callerUid, $newOwnerUid);
+		return $group;
+	}
+
+	/**
+	 * The proposed owner (or an admin) accepts or declines a pending transfer.
+	 *
+	 * @throws \RuntimeException on auth / validation failure
+	 */
+	public function respondOwnership(string $callerUid, string $gid, bool $accept): void {
+		$group   = $this->getGroup($gid);
+		$pending = $group->getPendingOwner();
+		if ($pending === '') {
+			throw new \RuntimeException('No pending ownership transfer for this group');
+		}
+		$isAdmin = $this->groupManager->isAdmin($callerUid);
+		if ($callerUid !== $pending && !$isAdmin) {
+			throw new \RuntimeException('Only the proposed owner can respond to this transfer');
+		}
+
+		$oldOwner = $group->getOwner();
+		if ($accept) {
+			$this->applyOwnership($group, $pending, $callerUid);
+			$this->publishActivity('ownership_accepted', ['gid' => $gid, 'uid' => $pending], $callerUid, $oldOwner);
+		} else {
+			$group->setPendingOwner('');
+			$this->groupMapper->update($group);
+			$this->syncService->pushGroupToAllSilos($group, $this->memberMapper->findByGid($gid));
+			$this->publishActivity('ownership_declined', ['gid' => $gid, 'uid' => $pending], $callerUid, $oldOwner);
+		}
+		$this->dismissOwnershipNotification($gid, $pending);
+	}
+
+	/**
+	 * A user is being deleted — hand off any groups they own so nothing is
+	 * orphaned. Reassign to the institution's domain owner when one resolves,
+	 * otherwise to the HIDDEN_OWNER sentinel (ownerless → unbilled, never deleted).
+	 */
+	public function reassignOwnedGroupsOnUserDeletion(string $uid): void {
+		foreach ($this->groupMapper->findByOwner($uid) as $group) {
+			$gid       = $group->getGid();
+			$successor = $this->resolveDomainOwner($uid, $gid);
+			$group->setOwner($successor);
+			$group->setPendingOwner('');
+			$this->groupMapper->update($group);
+			try {
+				$this->syncService->pushGroupToAllSilos($group, $this->memberMapper->findByGid($gid));
+			} catch (\Throwable $e) {
+				$this->logger->warning('user_group_admin: failed to propagate ownership reassignment for ' . $gid . ': ' . $e->getMessage());
+			}
+			$this->logger->info("user_group_admin: reassigned group {$gid} from deleted owner {$uid} to {$successor}");
+		}
+	}
+
+	private function applyOwnership(Group $group, string $newOwnerUid, string $actor): void {
+		$gid           = $group->getGid();
+		$previousOwner = $group->getOwner();
+		$group->setOwner($newOwnerUid);
+		$group->setPendingOwner('');
+		$this->groupMapper->update($group);
+
+		// Ensure the new owner is an accepted member.
+		try {
+			$m = $this->memberMapper->findByGidUid($gid, $newOwnerUid);
+			if ($m->getStatus() !== GroupMember::STATUS_ACCEPTED) {
+				$m->setStatus(GroupMember::STATUS_ACCEPTED);
+				$m->setAcceptToken('');
+				$m->setDeclineToken('');
+				$this->memberMapper->update($m);
+			}
+		} catch (DoesNotExistException) {
+			$this->addMember($gid, $newOwnerUid, GroupMember::STATUS_ACCEPTED);
+		}
+		$u = $this->userManager->get($newOwnerUid);
+		if ($u !== null) {
+			$this->groupManager->get($gid)?->addUser($u);
+		}
+
+		$this->syncService->pushGroupToAllSilos($group, $this->memberMapper->findByGid($gid));
+		$this->publishActivity('ownership_transferred', ['gid' => $gid, 'uid' => $newOwnerUid], $actor, $newOwnerUid);
+		if ($previousOwner !== '' && $previousOwner !== Group::HIDDEN_OWNER && $previousOwner !== $newOwnerUid) {
+			$this->publishActivity('ownership_transferred_from', ['gid' => $gid, 'uid' => $newOwnerUid], $actor, $previousOwner);
+		}
+	}
+
+	/** Resolve a successor owner from the departing user's domain group, or HIDDEN_OWNER. */
+	private function resolveDomainOwner(string $departingUid, string $gid): string {
+		$at = strpos($departingUid, '@');
+		if ($at !== false && $at > 0) {
+			$domain = substr($departingUid, $at + 1);
+			if ($domain !== '' && $domain !== $gid && preg_match('/^[a-zA-Z0-9_.\-]+$/', $domain)) {
+				try {
+					$owner = $this->groupMapper->findByGid($domain)->getOwner();
+					if ($owner !== '' && $owner !== Group::HIDDEN_OWNER
+						&& $owner !== $departingUid
+						&& $this->userManager->get($owner) !== null) {
+						return $owner;
+					}
+				} catch (DoesNotExistException) {}
+			}
+		}
+		return Group::HIDDEN_OWNER;
+	}
+
 	// ── Membership ────────────────────────────────────────────────────────────
 
 	/**
@@ -406,6 +571,24 @@ class GroupService {
 		$n->setApp('user_group_admin')
 			->setUser($ownerUid)
 			->setObject('group_join_request', $gid . '/' . $requesterUid);
+		$this->notificationManager->markProcessed($n);
+	}
+
+	private function sendOwnershipOfferNotification(string $gid, string $fromUid, string $toUid): void {
+		$n = $this->notificationManager->createNotification();
+		$n->setApp('user_group_admin')
+			->setUser($toUid)
+			->setDateTime(new \DateTime())
+			->setObject('ownership_transfer', $gid . '/' . $toUid)
+			->setSubject('ownership_transfer', ['gid' => $gid, 'inviter' => $fromUid]);
+		$this->notificationManager->notify($n);
+	}
+
+	private function dismissOwnershipNotification(string $gid, string $toUid): void {
+		$n = $this->notificationManager->createNotification();
+		$n->setApp('user_group_admin')
+			->setUser($toUid)
+			->setObject('ownership_transfer', $gid . '/' . $toUid);
 		$this->notificationManager->markProcessed($n);
 	}
 }

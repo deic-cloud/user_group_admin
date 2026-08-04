@@ -25,6 +25,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void   setStorageGrantTotal(string $storageGrantTotal)
  * @method bool   getGrantSyncHide()
  * @method void   setGrantSyncHide(bool $grantSyncHide)
+ * @method string getPendingOwner()
+ * @method void   setPendingOwner(string $pendingOwner)
  */
 class Group extends Entity {
 	public const HIDDEN_OWNER = 'uga_hidden_owner';
@@ -38,6 +40,7 @@ class Group extends Entity {
 	protected string $storageGrant      = '';
 	protected string $storageGrantTotal = '';
 	protected bool   $grantSyncHide     = true;
+	protected string $pendingOwner      = '';
 
 	public function __construct() {
 		$this->addType('private',       'boolean');
@@ -57,6 +60,7 @@ class Group extends Entity {
 			'storage_grant'       => $this->storageGrant,
 			'storage_grant_total' => $this->storageGrantTotal,
 			'grant_sync_hide'     => $this->grantSyncHide,
+			'pending_owner'       => $this->pendingOwner,
 		];
 	}
 }

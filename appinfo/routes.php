@@ -38,5 +38,10 @@ return [
 		['name' => 'group#inviteExternal',   'url' => '/api/v1/groups/{gid}/members/external', 'verb' => 'POST'],
 		['name' => 'group#acceptMembership', 'url' => '/api/v1/groups/{gid}/members/{uid}',    'verb' => 'PUT'],
 		['name' => 'group#removeMember',     'url' => '/api/v1/groups/{gid}/members/{uid}',    'verb' => 'DELETE'],
+
+		// Ownership transfer
+		['name' => 'group#transferOwnership', 'url' => '/api/v1/groups/{gid}/owner',         'verb' => 'PUT'],
+		['name' => 'group#acceptOwnership',   'url' => '/api/v1/groups/{gid}/owner/pending', 'verb' => 'PUT'],
+		['name' => 'group#declineOwnership',  'url' => '/api/v1/groups/{gid}/owner/pending', 'verb' => 'DELETE'],
 	],
 ];
