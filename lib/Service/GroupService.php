@@ -162,22 +162,24 @@ class GroupService {
 	// no data — it is a metadata + billing-pointer change, propagated to all silos.
 
 	/**
-	 * Offer (or, with $force and admin rights, immediately apply) ownership of
-	 * $gid to $newOwnerUid.
+	 * Offer ownership of $gid to $newOwnerUid (consent flow), or — as an admin or
+	 * the institution's domain owner — force it immediately with $force.
 	 *
+	 * @return array{group: array, warning: ?string, committed: ?string}
 	 * @throws \RuntimeException on auth / validation failure
 	 */
-	public function transferOwnership(string $callerUid, string $gid, string $newOwnerUid, bool $force = false): Group {
-		$group   = $this->getGroup($gid);
-		$isAdmin = $this->groupManager->isAdmin($callerUid);
-		$isOwner = $group->getOwner() === $callerUid;
+	public function transferOwnership(string $callerUid, string $gid, string $newOwnerUid, bool $force = false): array {
+		$group         = $this->getGroup($gid);
+		$isAdmin       = $this->groupManager->isAdmin($callerUid);
+		$isOwner       = $group->getOwner() === $callerUid;
+		$isDomainOwner = $this->isDomainOwner($callerUid, $gid);
 
-		if (!$isOwner && !$isAdmin) {
-			throw new \RuntimeException('Only the group owner or an administrator can transfer ownership');
+		if (!$isOwner && !$isAdmin && !$isDomainOwner) {
+			throw new \RuntimeException('Only the group owner, an administrator, or the domain owner can transfer ownership');
 		}
 		// Don't require a *local* user: the new owner may live on another silo.
 		// Realness is enforced by the accepted-membership check below (consent
-		// path); an admin forcing a transfer takes responsibility for the uid.
+		// path); a forced transfer takes responsibility for the uid.
 		if ($newOwnerUid === '') {
 			throw new \RuntimeException('No proposed owner given');
 		}
@@ -185,20 +187,23 @@ class GroupService {
 			throw new \RuntimeException('That user already owns this group');
 		}
 
-		// TODO(follow-up): verify the new owner's allocation covers the committed
-		// pool (storage_grant_total) + home top-ups before accepting, or let an
-		// admin override. Tracked in BACKLOG.
+		// Informed consent, no hard block: the owner's own quota is the backstop —
+		// if members later exhaust it, writes stop and the owner arranges a larger
+		// quota. We only surface the committed amount + a soft warning when it is
+		// close to or over the proposed owner's quota.
+		$committed = $this->committedHuman($group);
+		$warning   = $this->ownershipWarning($group, $newOwnerUid);
 
 		if ($force) {
-			if (!$isAdmin) {
-				throw new \RuntimeException('Only an administrator can transfer ownership without the recipient’s consent');
+			if (!$isAdmin && !$isDomainOwner) {
+				throw new \RuntimeException('Only an administrator or the domain owner can transfer ownership without the recipient’s consent');
 			}
 			$this->applyOwnership($group, $newOwnerUid, $callerUid);
-			return $group;
+			return ['group' => $group->toArray(), 'warning' => $warning, 'committed' => $committed];
 		}
 
 		// Consent flow: the proposed owner must already be an active member, so
-		// they can see the group and act on the offer. (Admin force bypasses this.)
+		// they can see the group and act on the offer. (Force bypasses this.)
 		try {
 			if ($this->memberMapper->findByGidUid($gid, $newOwnerUid)->getStatus() !== GroupMember::STATUS_ACCEPTED) {
 				throw new \RuntimeException('The proposed owner must be an active member of the group');
@@ -207,14 +212,78 @@ class GroupService {
 			throw new \RuntimeException('The proposed owner must be an active member of the group');
 		}
 
-		// Record the offer and notify the proposed owner.
+		// Record the offer and notify the proposed owner (with what they'd sponsor).
 		$group->setPendingOwner($newOwnerUid);
 		$this->groupMapper->update($group);
 		$this->syncService->pushGroupToAllSilos($group, $this->memberMapper->findByGid($gid));
-		$this->sendOwnershipOfferNotification($gid, $callerUid, $newOwnerUid);
+		$this->sendOwnershipOfferNotification($gid, $callerUid, $newOwnerUid, $committed);
 		$this->publishActivity('ownership_offered',        ['gid' => $gid, 'uid' => $newOwnerUid], $callerUid, $callerUid);
 		$this->publishActivity('ownership_offer_received', ['gid' => $gid, 'inviter' => $callerUid], $callerUid, $newOwnerUid);
-		return $group;
+		return ['group' => $group->toArray(), 'warning' => $warning, 'committed' => $committed];
+	}
+
+	/**
+	 * True if $callerUid owns the institutional domain group (the schacHomeOrganization
+	 * group, named after the UID domain) of any accepted member of $gid — i.e. they are
+	 * the responsible party for that institution's users. HIDDEN_OWNER never qualifies.
+	 */
+	private function isDomainOwner(string $callerUid, string $gid): bool {
+		if ($callerUid === '' || $callerUid === Group::HIDDEN_OWNER) {
+			return false;
+		}
+		$domains = [];
+		foreach ($this->memberMapper->findByGid($gid, GroupMember::STATUS_ACCEPTED) as $m) {
+			$at = strpos($m->getUid(), '@');
+			if ($at !== false && $at > 0) {
+				$d = substr($m->getUid(), $at + 1);
+				if ($d !== '' && $d !== $gid) {
+					$domains[$d] = true;
+				}
+			}
+		}
+		foreach (array_keys($domains) as $domain) {
+			try {
+				if ($this->groupMapper->findByGid($domain)->getOwner() === $callerUid) {
+					return true;
+				}
+			} catch (DoesNotExistException) {}
+		}
+		return false;
+	}
+
+	/** The group's committed grant pool as a human string, or null if none. */
+	private function committedHuman(Group $group): ?string {
+		$t = trim((string)$group->getStorageGrantTotal());
+		return $t !== '' ? $t : null;
+	}
+
+	/** Soft, non-blocking warning if the committed pool is close to / over the proposed owner's quota. */
+	private function ownershipWarning(Group $group, string $newOwnerUid): ?string {
+		$committed = (int)\OCP\Util::computerFileSize((string)$group->getStorageGrantTotal());
+		if ($committed <= 0) {
+			return null;
+		}
+		$user = $this->userManager->get($newOwnerUid);
+		if ($user === null) {
+			return null; // cross-silo / unknown quota — can't compare (soft check only)
+		}
+		$q = strtolower(trim((string)$user->getQuota()));
+		if ($q === '' || $q === 'none' || $q === 'default' || $q === 'unlimited') {
+			return null; // unlimited / unset — no signal
+		}
+		$quota = \OCP\Util::computerFileSize($user->getQuota());
+		if ($quota === false || $quota <= 0) {
+			return null;
+		}
+		$c = \OCP\Util::humanFileSize($committed);
+		$qh = \OCP\Util::humanFileSize((int)$quota);
+		if ($committed >= $quota) {
+			return "The group's committed storage ({$c}) exceeds {$newOwnerUid}'s quota ({$qh}); they may need a larger quota.";
+		}
+		if ($committed >= 0.8 * $quota) {
+			return "The group's committed storage ({$c}) is close to {$newOwnerUid}'s quota ({$qh}).";
+		}
+		return null;
 	}
 
 	/**
@@ -229,7 +298,7 @@ class GroupService {
 			throw new \RuntimeException('No pending ownership transfer for this group');
 		}
 		$isAdmin = $this->groupManager->isAdmin($callerUid);
-		if ($callerUid !== $pending && !$isAdmin) {
+		if ($callerUid !== $pending && !$isAdmin && !$this->isDomainOwner($callerUid, $gid)) {
 			throw new \RuntimeException('Only the proposed owner can respond to this transfer');
 		}
 
@@ -574,13 +643,13 @@ class GroupService {
 		$this->notificationManager->markProcessed($n);
 	}
 
-	private function sendOwnershipOfferNotification(string $gid, string $fromUid, string $toUid): void {
+	private function sendOwnershipOfferNotification(string $gid, string $fromUid, string $toUid, ?string $committed = null): void {
 		$n = $this->notificationManager->createNotification();
 		$n->setApp('user_group_admin')
 			->setUser($toUid)
 			->setDateTime(new \DateTime())
 			->setObject('ownership_transfer', $gid . '/' . $toUid)
-			->setSubject('ownership_transfer', ['gid' => $gid, 'inviter' => $fromUid]);
+			->setSubject('ownership_transfer', ['gid' => $gid, 'inviter' => $fromUid, 'committed' => $committed ?? '']);
 		$this->notificationManager->notify($n);
 	}
 

@@ -13,7 +13,8 @@
 		<!-- Members tab -->
 		<div v-if="activeTab === 'members'">
 			<div v-if="pendingOwner === currentUser" class="uga-transfer-offer">
-				<p>{{ t('user_group_admin', 'You have been offered ownership of this group. Accepting makes you responsible for its storage and billing.') }}</p>
+				<p v-if="groupCommitted">{{ t('user_group_admin', 'You have been offered ownership of this group. Accepting makes you responsible for its storage and billing (committed pool: {c}).', { c: groupCommitted }) }}</p>
+				<p v-else>{{ t('user_group_admin', 'You have been offered ownership of this group. Accepting makes you responsible for its storage and billing.') }}</p>
 				<div class="uga-transfer-offer__actions">
 					<NcButton variant="primary" @click="acceptOwnership">{{ t('user_group_admin', 'Accept ownership') }}</NcButton>
 					<NcButton @click="declineOwnership">{{ t('user_group_admin', 'Decline') }}</NcButton>
@@ -136,7 +137,7 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from '@nextcloud/axios'
 import { t } from '@nextcloud/l10n'
-import { showError, showSuccess } from '@nextcloud/dialogs'
+import { showError, showSuccess, showWarning } from '@nextcloud/dialogs'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
@@ -170,6 +171,7 @@ const editTopup             = ref('')
 const pendingOwner          = ref('')
 const transferUser          = ref(null)
 const transferError         = ref('')
+const groupCommitted        = ref('')
 const quotaOptions          = QUOTA_OPTIONS.map(v => ({ id: v, label: v }))
 const quotaTotalOptions     = QUOTA_TOTAL_OPTIONS.map(v => ({ id: v, label: v }))
 
@@ -206,6 +208,7 @@ async function loadGroup() {
 	editStorageGrantTotal.value = quotaTotalOptions.find(o => o.id === totalId) ?? quotaTotalOptions.at(-1)
 	editGrantSyncHide.value = g.grant_sync_hide !== false
 	pendingOwner.value      = g.pending_owner ?? ''
+	groupCommitted.value    = g.storage_grant_total ?? ''
 
 	// Home-directory top-up lives in files_accounting (optional app); tolerate absence.
 	try {
@@ -344,10 +347,15 @@ async function initiateTransfer() {
 	if (!transferUser.value) return
 	transferError.value = ''
 	try {
-		await axios.put(`${OCS}/groups/${encodeURIComponent(props.gid)}/owner`,
+		const { data } = await axios.put(`${OCS}/groups/${encodeURIComponent(props.gid)}/owner`,
 			{ uid: transferUser.value.uid },
 			{ headers: { 'OCS-APIREQUEST': 'true' } })
-		showSuccess(t('user_group_admin', 'Ownership offer sent — awaiting acceptance'))
+		const warning = data.ocs?.data?.warning
+		if (warning) {
+			showWarning(warning)
+		} else {
+			showSuccess(t('user_group_admin', 'Ownership offer sent — awaiting acceptance'))
+		}
 		transferUser.value = null
 		loadGroup()
 	} catch (e) {

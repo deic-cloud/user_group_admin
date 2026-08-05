@@ -86,7 +86,10 @@ class Notifier implements INotifier {
 			$gid = $p['gid'];
 
 			$notification->setParsedSubject($l->t('You have been offered ownership of group "%s"', [$gid]));
-			$notification->setParsedMessage($l->t('Offered by %s', [$p['inviter']]));
+			$committed = $p['committed'] ?? '';
+			$notification->setParsedMessage($committed !== ''
+				? $l->t('Offered by %s. Accepting makes you responsible for its storage and billing (committed pool: %s).', [$p['inviter'], $committed])
+				: $l->t('Offered by %s. Accepting makes you responsible for its storage and billing.', [$p['inviter']]));
 
 			$base = '/ocs/v2.php/apps/user_group_admin/api/v1/groups/' . urlencode($gid) . '/owner/pending';
 

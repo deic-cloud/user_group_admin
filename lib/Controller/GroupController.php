@@ -172,8 +172,8 @@ class GroupController extends OCSController {
 	#[NoAdminRequired]
 	public function transferOwnership(string $gid, string $uid, bool $force = false): DataResponse {
 		try {
-			$group = $this->groupService->transferOwnership($this->uid(), $gid, $uid, $force);
-			return $this->ok($group->toArray());
+			// Returns ['group' => array, 'warning' => ?string, 'committed' => ?string]
+			return $this->ok($this->groupService->transferOwnership($this->uid(), $gid, $uid, $force));
 		} catch (\RuntimeException $e) {
 			return $this->err($e->getMessage());
 		}
