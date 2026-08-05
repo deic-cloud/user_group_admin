@@ -97,6 +97,10 @@ class InternalController extends Controller {
 	public function deleteGroup(string $gid): JSONResponse {
 		if ($err = $this->checkSecret()) return $err;
 
+		// Dismiss this node's pending notifications for the group's members before
+		// the rows go — each silo clears its own users' (possibly cross-silo) copies.
+		$this->dismissAllGroupNotifications($gid);
+
 		$this->memberMapper->deleteByGid($gid);
 		$this->groupMapper->deleteByGid($gid);
 		$ncGroup = $this->groupManager->get($gid);
@@ -196,6 +200,8 @@ class InternalController extends Controller {
 		$group->setOpen((bool)($data['open'] ?? false));
 		$group->setHidden((bool)($data['hidden'] ?? false));
 		$group->setStorageGrant($data['storage_grant'] ?? '');
+		$group->setStorageGrantTotal($data['storage_grant_total'] ?? '');
+		$group->setGrantSyncHide((bool)($data['grant_sync_hide'] ?? true));
 		$group->setPendingOwner($data['pending_owner'] ?? '');
 
 		if ($isNew) {
@@ -300,5 +306,33 @@ class InternalController extends Controller {
 			->setUser($ownerUid)
 			->setObject('group_join_request', $gid . '/' . $requesterUid);
 		$this->notificationManager->markProcessed($n);
+	}
+
+	private function dismissOwnershipNotification(string $gid, string $toUid): void {
+		$n = $this->notificationManager->createNotification();
+		$n->setApp('user_group_admin')
+			->setUser($toUid)
+			->setObject('ownership_transfer', $gid . '/' . $toUid);
+		$this->notificationManager->markProcessed($n);
+	}
+
+	/** Dismiss every pending notification tied to a group on this node (before deletion). */
+	private function dismissAllGroupNotifications(string $gid): void {
+		$owner = '';
+		$pending = '';
+		try {
+			$g = $this->groupMapper->findByGid($gid);
+			$owner   = $g->getOwner();
+			$pending = $g->getPendingOwner();
+		} catch (\Throwable) {}
+		foreach ($this->memberMapper->findByGid($gid) as $m) {
+			$this->dismissInvitationNotification($gid, $m->getUid());
+			if ($owner !== '') {
+				$this->dismissJoinRequestNotification($gid, $m->getUid(), $owner);
+			}
+		}
+		if ($pending !== '') {
+			$this->dismissOwnershipNotification($gid, $pending);
+		}
 	}
 }

@@ -141,6 +141,11 @@ class GroupService {
 	public function deleteGroup(string $callerUid, string $gid): void {
 		$group = $this->getGroupForOwner($callerUid, $gid);
 
+		// Clear any pending invitation / join-request / ownership-offer notifications
+		// for this group's members before the rows disappear, so nobody is left with a
+		// notification pointing at a deleted group.
+		$this->dismissAllGroupNotifications($group, $this->memberMapper->findByGid($gid));
+
 		$this->memberMapper->deleteByGid($gid);
 		$this->groupMapper->deleteByGid($gid);
 		$ncGroup = $this->groupManager->get($gid);
@@ -324,6 +329,10 @@ class GroupService {
 		foreach ($this->groupMapper->findByOwner($uid) as $group) {
 			$gid       = $group->getGid();
 			$successor = $this->resolveDomainOwner($uid, $gid);
+			// A pending offer against this group is now stale (owner changed) — clear it.
+			if ($group->getPendingOwner() !== '') {
+				$this->dismissOwnershipNotification($gid, $group->getPendingOwner());
+			}
 			$group->setOwner($successor);
 			$group->setPendingOwner('');
 			$this->groupMapper->update($group);
@@ -659,5 +668,20 @@ class GroupService {
 			->setUser($toUid)
 			->setObject('ownership_transfer', $gid . '/' . $toUid);
 		$this->notificationManager->markProcessed($n);
+	}
+
+	/** Dismiss every pending notification tied to a group (used before deleting it). */
+	private function dismissAllGroupNotifications(Group $group, array $members): void {
+		$gid   = $group->getGid();
+		$owner = $group->getOwner();
+		foreach ($members as $m) {
+			$this->dismissInvitationNotification($gid, $m->getUid());
+			if ($owner !== '') {
+				$this->dismissJoinRequestNotification($gid, $m->getUid(), $owner);
+			}
+		}
+		if ($group->getPendingOwner() !== '') {
+			$this->dismissOwnershipNotification($gid, $group->getPendingOwner());
+		}
 	}
 }
