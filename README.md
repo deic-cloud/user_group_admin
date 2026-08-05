@@ -66,6 +66,17 @@ The grant is configured in the group's Settings tab:
 
 Separately from the grant *folder*, a group owner can allocate extra free quota on their members' **own home directories**, drawn from their own assigned quota — the "OneDrive alternative" option. It's set from the same group **Settings** tab ("Home-directory top-up", e.g. `100 GB`, empty to remove) and is stored/enforced by `files_accounting` (`files_accounting_topup`), which raises each member's effective free quota (and native hard-stop). The control calls the `files_accounting` `grouptopup` OCS endpoint, which authorises the **group owner** (not just admins); on a silo the write is forwarded to the master. Hidden gracefully if `files_accounting` is not installed.
 
+### Ownership transfer
+
+Group ownership — and with it the billing responsibility for the group's grant folder and home top-ups — can be handed to another member, so a group is never stranded when its owner (e.g. a departing PI) leaves.
+
+- **Consent by default.** The owner offers ownership to an active member from the group's **Settings** tab ("Transfer ownership"). The recipient gets a bell notification and an **Accept / Decline** banner on the group, showing the committed amount they'd take on. Ownership changes only when they accept — it can't be assigned silently, because the owner's own quota backs the group's sponsored storage.
+- **Soft warning, no block.** If the committed pool is close to or over the proposed owner's quota, the offer surfaces a warning but never blocks; if members later exhaust it, the owner simply arranges a larger quota.
+- **Domain owner & admin.** Besides the current owner, an administrator or the institution's **domain owner** (owner of the members' `schacHomeOrganization` group, e.g. `dtu.dk`) may initiate a transfer — and may **force** it without consent, so IT can reassign a departed PI's group without full admin rights.
+- **No-orphan.** If an owner's account is deleted, their groups are reassigned automatically to the domain owner, or to the `HIDDEN_OWNER` sentinel (ownerless → unbilled, never deleted).
+
+Because grant folders are stored per-member, a transfer moves **no data** — it is a metadata + billing-pointer change, propagated to all silos; `files_accounting` re-points billing automatically since it reads the group's `owner`.
+
 ### Cross-silo sync
 
 When a group is created, updated, or deleted on the master, `files_sharding` propagates the change to all registered silos via `POST /internal/users/{userId}/update` and related endpoints. Silos store a local mirror so group membership is available without a round-trip to the master.
@@ -88,6 +99,7 @@ When a group is created, updated, or deleted on the master, `files_sharding` pro
 | `type` | varchar | `invite` / `open` / `private` |
 | `storage_grant` | bigint | Per-member grant size in bytes (0 = none) |
 | `storage_grant_total` | varchar | Committed-pool cap for the whole group (hard write-stop; empty = no pool cap) |
+| `pending_owner` | varchar | Proposed new owner awaiting consent during an ownership transfer (empty = none) |
 
 **`user_group_admin_members`**
 
@@ -116,6 +128,9 @@ All endpoints under `/ocs/v2.php/apps/user_group_admin/api/v1/`. Authentication 
 | `DELETE` | `/groups/{gid}/members/{uid}` | Remove member |
 | `POST` | `/groups/{gid}/accept` | Accept invitation |
 | `PUT` | `/groups/{gid}` | Update group settings (type, storage grant) |
+| `PUT` | `/groups/{gid}/owner` | Offer ownership (`uid`); admin/domain owner may `force=1` (no consent) |
+| `PUT` | `/groups/{gid}/owner/pending` | Accept a pending ownership offer |
+| `DELETE` | `/groups/{gid}/owner/pending` | Decline a pending ownership offer |
 
 ## Build
 
