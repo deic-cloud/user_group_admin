@@ -84,6 +84,7 @@ class GroupSyncService {
 
 		if ($this->shardingService->isMaster()) {
 			foreach ($this->shardingService->getAllServers() as $server) {
+				if ($this->shardingService->isSelf($server)) { continue; } // skip ourselves — local search already covered it
 				$remote = $this->get(
 					$this->shardingService->apiUrlForServer($server),
 					'internal/users/search',
@@ -159,6 +160,7 @@ class GroupSyncService {
 	private function syncTargets(): array {
 		$urls = [];
 		foreach ($this->shardingService->getAllServers() as $server) {
+			if ($this->shardingService->isSelf($server)) { continue; } // don't push to ourselves
 			$urls[] = $this->shardingService->apiUrlForServer($server);
 		}
 		if (!$this->shardingService->isMaster()) {

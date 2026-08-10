@@ -9,6 +9,8 @@ interface IShardingAdapter {
 	/** @return mixed[] opaque server objects passed back to apiUrlForServer() */
 	public function getAllServers(): array;
 	public function apiUrlForServer(mixed $server): string;
+	/** True if $server is this node's own registry row (skip it in push loops). */
+	public function isSelf(mixed $server): bool;
 	public function masterInternalUrl(): string;
 	/** Public-facing master URL, or '' if unknown. */
 	public function masterUrl(): string;
