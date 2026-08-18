@@ -27,7 +27,17 @@ class GroupService {
 		private INotificationManager  $notificationManager,
 		private IActivityManager      $activityManager,
 		private LoggerInterface       $logger,
+		private \OCP\EventDispatcher\IEventDispatcher $eventDispatcher,
 	) {}
+
+	/** Signal that a group's accepted membership changed (see GroupMembersChangedEvent). */
+	private function membersChanged(string $gid): void {
+		try {
+			$this->eventDispatcher->dispatchTyped(new \OCA\UserGroupAdmin\Event\GroupMembersChangedEvent($gid));
+		} catch (\Throwable $e) {
+			$this->logger->warning('user_group_admin: membersChanged dispatch failed: ' . $e->getMessage());
+		}
+	}
 
 	// ── Group CRUD ────────────────────────────────────────────────────────────
 
@@ -370,6 +380,7 @@ class GroupService {
 		}
 
 		$this->syncService->pushGroupToAllSilos($group, $this->memberMapper->findByGid($gid));
+		$this->membersChanged($gid);
 		$this->publishActivity('ownership_transferred', ['gid' => $gid, 'uid' => $newOwnerUid], $actor, $newOwnerUid);
 		if ($previousOwner !== '' && $previousOwner !== Group::HIDDEN_OWNER && $previousOwner !== $newOwnerUid) {
 			$this->publishActivity('ownership_transferred_from', ['gid' => $gid, 'uid' => $newOwnerUid], $actor, $previousOwner);
@@ -437,6 +448,7 @@ class GroupService {
 			if ($user !== null) {
 				$this->groupManager->get($gid)?->addUser($user);
 			}
+			$this->membersChanged($gid);
 			$this->publishActivity('member_joined', ['gid' => $gid], $callerUid, $callerUid, $owner);
 		} else {
 			// User is requesting to join: STATUS_OPEN until owner approves.
@@ -477,6 +489,7 @@ class GroupService {
 		}
 		$owner = $group->getOwner();
 		$this->syncService->pushMemberToAllSilos($member);
+		$this->membersChanged($gid);
 		$this->dismissInvitationNotification($gid, $targetUid);
 		$this->dismissJoinRequestNotification($gid, $targetUid, $owner);
 		if ($isOwner) {
@@ -508,6 +521,7 @@ class GroupService {
 			$this->groupManager->get($gid)?->removeUser($user);
 		}
 		$this->syncService->removeMemberOnAllSilos($gid, $targetUid);
+		$this->membersChanged($gid);
 		$this->dismissInvitationNotification($gid, $targetUid);
 		$this->dismissJoinRequestNotification($gid, $targetUid, $owner);
 		if ($isSelf) {

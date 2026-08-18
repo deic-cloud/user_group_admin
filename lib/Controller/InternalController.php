@@ -37,8 +37,17 @@ class InternalController extends Controller {
 		private IShardingAdapter  $shardingService,
 		private INotificationManager $notificationManager,
 		private IConfig           $config,
+		private \OCP\EventDispatcher\IEventDispatcher $eventDispatcher,
 	) {
 		parent::__construct($appName, $request);
+	}
+
+	/** Signal that a group's accepted membership changed (see GroupMembersChangedEvent). */
+	private function membersChanged(string $gid): void {
+		try {
+			$this->eventDispatcher->dispatchTyped(new \OCA\UserGroupAdmin\Event\GroupMembersChangedEvent($gid));
+		} catch (\Throwable) {
+		}
 	}
 
 	private function checkSecret(): ?JSONResponse {
@@ -128,6 +137,7 @@ class InternalController extends Controller {
 
 		$this->upsertMember($mData);
 		$this->syncNcGroupMembers($gid);
+		$this->membersChanged($gid);
 		$this->handleMemberNotification($gid, $mData);
 
 		if ($this->shardingService->isMaster()) {
@@ -175,6 +185,7 @@ class InternalController extends Controller {
 		if ($this->shardingService->isMaster()) {
 			$this->syncService->removeMemberOnAllSilos($gid, $uid);
 		}
+		$this->membersChanged($gid);
 
 		return new JSONResponse(['success' => true]);
 	}
