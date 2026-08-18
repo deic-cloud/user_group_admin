@@ -70,6 +70,11 @@
 		<!-- Settings tab (owner only) -->
 		<div v-if="activeTab === 'settings' && isOwner">
 			<h3>{{ t('user_group_admin', 'Group settings') }}</h3>
+			<p class="uga-gid">
+				<span class="uga-gid__label">{{ t('user_group_admin', 'Group ID') }}:</span>
+				<code class="uga-gid__value">{{ gid }}</code>
+			</p>
+			<p class="uga-hint">{{ t('user_group_admin', 'Identifier used in WebDAV paths for grant folders. Not editable.') }}</p>
 			<NcTextField v-model="editDescription" :label="t('user_group_admin', 'Description')" />
 			<NcCheckboxRadioSwitch v-model="editOpen">
 				{{ t('user_group_admin', 'Open group') }}
@@ -391,7 +396,14 @@ onMounted(() => { loadMembers(); loadGroup() })
 </script>
 
 <style scoped>
-.uga-details { min-height: 300px; }
+/* padding-bottom gives the last row (Save / Delete) clearance inside the dialog's
+   scroll area — without it the buttons are clipped at the bottom on shorter windows. */
+.uga-details { min-height: 300px; padding-bottom: 24px; }
+.uga-gid { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 0; }
+.uga-gid__label { color: var(--color-text-maxcontrast); }
+.uga-gid__value { font-family: var(--font-face-monospace, monospace);
+	background: var(--color-background-dark); padding: 1px 6px;
+	border-radius: var(--border-radius, 4px); user-select: all; }
 .uga-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--color-border); margin-bottom: 16px; }
 .uga-tabs button { padding: 8px 16px; border: none; background: none; cursor: pointer;
 	border-bottom: 2px solid transparent; color: var(--color-text-maxcontrast); }
