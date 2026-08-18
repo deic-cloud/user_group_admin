@@ -398,7 +398,7 @@ onMounted(() => { loadMembers(); loadGroup() })
 <style scoped>
 /* padding-bottom gives the last row (Save / Delete) clearance inside the dialog's
    scroll area — without it the buttons are clipped at the bottom on shorter windows. */
-.uga-details { min-height: 300px; padding-bottom: 24px; }
+.uga-details { min-height: 300px; padding-bottom: 40px; }
 .uga-gid { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 0; }
 .uga-gid__label { color: var(--color-text-maxcontrast); }
 .uga-gid__value { font-family: var(--font-face-monospace, monospace);
