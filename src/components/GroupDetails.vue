@@ -63,20 +63,22 @@
 			<template v-if="isOwner">
 				<h3>{{ t('user_group_admin', 'Add member') }}</h3>
 				<div class="uga-add-member">
-					<NcSelect
-						v-model="inviteUser"
-						:options="userOptions"
-						:loading="searchingUsers"
-						:searchable="true"
-						:placeholder="t('user_group_admin', 'Search for a user…')"
-						label="label"
-						track-by="uid"
-						class="uga-user-select"
-						@search="onUserSearch" />
-					<NcButton :disabled="!inviteUser" @click="inviteByUid">
-						{{ t('user_group_admin', 'Invite user') }}
-					</NcButton>
+					<NcTextField
+						v-model="inviteQuery"
+						:label="t('user_group_admin', 'Search for a user to add')"
+						:placeholder="t('user_group_admin', 'Name or username')"
+						class="uga-user-field" />
 				</div>
+				<ul v-if="userOptions.length" class="uga-user-results">
+					<li v-for="u in userOptions" :key="u.uid">
+						<span class="uga-user-results__name">{{ u.label }}</span>
+						<NcButton size="small" @click="inviteByUid(u.uid)">
+							{{ t('user_group_admin', 'Add') }}
+						</NcButton>
+					</li>
+				</ul>
+				<p v-else-if="searchingUsers" class="uga-hint">{{ t('user_group_admin', 'Searching…') }}</p>
+				<p v-else-if="inviteQuery.length >= 2" class="uga-hint">{{ t('user_group_admin', 'No users found. If they are external, invite them by email below.') }}</p>
 				<div class="uga-add-member">
 					<NcTextField
 						v-model="inviteEmail"
@@ -303,9 +305,9 @@ const inviteQuery = ref('')
 
 function isValidEmail(v) { return EMAIL_RE.test(v ?? '') }
 
+let searchTimer = null
 async function onUserSearch(query) {
-	inviteQuery.value = query ?? ''
-	if (!query || query.length < 2) { userOptions.value = []; return }
+	if (!query || query.length < 2) { userOptions.value = []; searchingUsers.value = false; return }
 	searchingUsers.value = true
 	try {
 		const { data } = await axios.get(`${OCS}/users/search`, {
@@ -323,6 +325,13 @@ async function onUserSearch(query) {
 	}
 }
 
+// Live search as the owner types — keeps the typed text in place (old ownCloud
+// behaviour), unlike a combobox that wipes it on blur.
+watch(inviteQuery, (q) => {
+	if (searchTimer) clearTimeout(searchTimer)
+	searchTimer = setTimeout(() => onUserSearch(q), 250)
+})
+
 function resetInviteForm() {
 	inviteUser.value  = null
 	userOptions.value = []
@@ -331,13 +340,13 @@ function resetInviteForm() {
 	inviteError.value = ''
 }
 
-async function inviteByUid() {
-	if (!inviteUser.value) return
+async function inviteByUid(uid) {
+	if (!uid) return
 	inviteError.value = ''
 	try {
 		await axios.post(
 			`${OCS}/groups/${encodeURIComponent(props.gid)}/members`,
-			{ uid: inviteUser.value.uid },
+			{ uid },
 			{ headers: { 'OCS-APIREQUEST': 'true' } },
 		)
 		resetInviteForm()
@@ -517,6 +526,11 @@ onMounted(() => { loadMembers(); loadGroup() })
 .uga-add-member { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 .uga-add-member :deep(button) { flex-shrink: 0; }
 .uga-user-select { flex: 1; min-width: 0; }
+.uga-user-field { flex: 1; min-width: 0; }
+.uga-user-results { list-style: none; margin: 4px 0 8px; padding: 0; border: 1px solid var(--color-border); border-radius: var(--border-radius-large); max-height: 220px; overflow-y: auto; }
+.uga-user-results li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px 4px 10px; }
+.uga-user-results li:not(:last-child) { border-bottom: 1px solid var(--color-border); }
+.uga-user-results__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .uga-settings-actions { display: flex; gap: 8px; margin-top: 16px; }
 .uga-error { color: var(--color-error); }
 .uga-leave { margin-top: 24px; }
