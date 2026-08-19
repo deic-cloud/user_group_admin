@@ -80,6 +80,19 @@
 				</NcEmptyContent>
 			</div>
 		</NcAppContent>
+		<NcDialog v-if="joinCandidate"
+			:name="t('user_group_admin', 'Join group')"
+			@closing="joinCandidate = null">
+			<div class="uga-join">
+				<p class="uga-join__gid"><code>{{ joinCandidate.gid }}</code></p>
+				<p>{{ t('user_group_admin', 'Owner') }}: {{ ownerLabelOf(joinCandidate) }}</p>
+				<p v-if="joinCandidate.description" class="uga-join__desc">{{ joinCandidate.description }}</p>
+			</div>
+			<template #actions>
+				<NcButton @click="joinCandidate = null">{{ t('user_group_admin', 'Cancel') }}</NcButton>
+				<NcButton variant="primary" @click="doJoin">{{ t('user_group_admin', 'Join') }}</NcButton>
+			</template>
+		</NcDialog>
 	</NcContent>
 </template>
 
@@ -96,7 +109,9 @@ import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcAppNavigationNew from '@nextcloud/vue/components/NcAppNavigationNew'
 import NcAppNavigationSearch from '@nextcloud/vue/components/NcAppNavigationSearch'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcContent from '@nextcloud/vue/components/NcContent'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import { mdiPlus, mdiExitToApp, mdiAccountPlus } from '@mdi/js'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -113,6 +128,7 @@ const joinableGroups    = ref([])
 const selectedGid       = ref(null)
 const creating          = ref(false)
 const searchQuery       = ref('')
+const joinCandidate     = ref(null)
 
 // Inline icon components using NcIconSvgWrapper
 const PlusIcon  = { props: ['size'], render(h) { return h(NcIconSvgWrapper, { props: { path: mdiPlus } }) } }
@@ -191,13 +207,20 @@ function joinableName(g) {
 	return `${g.gid} (${t('user_group_admin', 'owner: {owner}', { owner })})`
 }
 
-function confirmJoin(g) {
+function ownerLabelOf(g) {
 	const dn = g.owner_display_name
-	const who = dn && dn !== g.owner ? `${dn} (${g.owner})` : g.owner
-	let msg = t('user_group_admin', 'Join group "{gid}"?', { gid: g.gid })
-		+ '\n' + t('user_group_admin', 'Owner: {who}', { who })
-	if (g.description) { msg += '\n' + t('user_group_admin', 'Description: {desc}', { desc: g.description }) }
-	if (window.confirm(msg)) { join(g.gid) }
+	return dn && dn !== g.owner ? `${dn} (${g.owner})` : g.owner
+}
+
+// Open a native confirm dialog for a joinable group (owner + description shown).
+function confirmJoin(g) {
+	joinCandidate.value = g
+}
+
+function doJoin() {
+	const g = joinCandidate.value
+	joinCandidate.value = null
+	if (g) { join(g.gid) }
 }
 
 async function leave(gid) {
@@ -246,4 +269,8 @@ onMounted(loadMyGroups)
 	padding-top: calc(var(--default-clickable-area, 44px) + 8px);
 	max-width: 860px;
 }
+.uga-join { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 8px; }
+.uga-join__gid code { font-family: var(--font-face-monospace, monospace);
+	background: var(--color-background-dark); padding: 1px 6px; border-radius: var(--border-radius, 4px); }
+.uga-join__desc { color: var(--color-text-maxcontrast); }
 </style>
