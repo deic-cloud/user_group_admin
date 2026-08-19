@@ -35,6 +35,9 @@ class GroupSyncService {
 		$this->verifySsl = (bool)$config->getSystemValue('files_sharding_verify_ssl', true);
 	}
 
+	/** @var array<string,string> per-request display-name cache */
+	private array $dnCache = [];
+
 	/** Push a full group record + its current member list to all peers. */
 	public function pushGroupToAllSilos(Group $group, array $members): void {
 		$memberData = array_map(fn (GroupMember $m) => json_encode($m->toArray()), $members);
@@ -107,6 +110,39 @@ class GroupSyncService {
 		}
 
 		return array_values($results);
+	}
+
+	/**
+	 * Resolve a user's display name, consulting the master directory when the user
+	 * isn't local (e.g. a group owner who lives on another silo). Falls back to the
+	 * uid; cached per request.
+	 */
+	public function resolveDisplayName(string $uid): string {
+		if ($uid === '' || $uid === Group::HIDDEN_OWNER) {
+			return '';
+		}
+		if (isset($this->dnCache[$uid])) {
+			return $this->dnCache[$uid];
+		}
+		$local = $this->userManager->get($uid);
+		if ($local !== null) {
+			return $this->dnCache[$uid] = $local->getDisplayName();
+		}
+		$name = $uid;
+		try {
+			if (!$this->shardingService->isMaster()) {
+				$masterUrl = $this->shardingService->masterInternalUrl();
+				if ($masterUrl !== '') {
+					$remote = $this->get($masterUrl, 'internal/users/search', ['q' => $uid]);
+					foreach ((array)$remote as $u) {
+						if (($u['uid'] ?? '') === $uid) { $name = (string)($u['displayName'] ?? $uid); break; }
+					}
+				}
+			}
+		} catch (\Throwable $e) {
+			$this->logger->warning('user_group_admin: resolveDisplayName master lookup failed: ' . $e->getMessage());
+		}
+		return $this->dnCache[$uid] = $name;
 	}
 
 	// ── Internal HTTP helpers ─────────────────────────────────────────────────

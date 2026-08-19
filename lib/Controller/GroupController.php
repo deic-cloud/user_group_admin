@@ -4,14 +4,13 @@ declare(strict_types=1);
 
 namespace OCA\UserGroupAdmin\Controller;
 
-use OCA\UserGroupAdmin\Db\Group;
 use OCA\UserGroupAdmin\Service\GroupService;
+use OCA\UserGroupAdmin\Service\GroupSyncService;
 use OCA\UserGroupAdmin\Service\InvitationService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
-use OCP\IUserManager;
 use OCP\IUserSession;
 
 class GroupController extends OCSController {
@@ -21,7 +20,7 @@ class GroupController extends OCSController {
 		private GroupService      $groupService,
 		private InvitationService $invitationService,
 		private IUserSession      $userSession,
-		private IUserManager      $userManager,
+		private GroupSyncService  $syncService,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -31,10 +30,7 @@ class GroupController extends OCSController {
 	}
 
 	private function withOwnerName(array $g): array {
-		$owner = (string)($g['owner'] ?? '');
-		$g['owner_display_name'] = ($owner === '' || $owner === Group::HIDDEN_OWNER)
-			? ''
-			: ($this->userManager->get($owner)?->getDisplayName() ?? $owner);
+		$g['owner_display_name'] = $this->syncService->resolveDisplayName((string)($g['owner'] ?? ''));
 		return $g;
 	}
 
