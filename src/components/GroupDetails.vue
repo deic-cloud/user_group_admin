@@ -215,12 +215,16 @@ async function loadGroup() {
 	pendingOwner.value      = g.pending_owner ?? ''
 	groupCommitted.value    = g.storage_grant_total ?? ''
 
-	// Home-directory top-up lives in files_accounting (optional app); tolerate absence.
-	try {
-		const { data: tu } = await axios.get(`${FA_OCS}/grouptopup`,
-			{ params: { gid: props.gid }, headers: { 'OCS-APIREQUEST': 'true' } })
-		editTopup.value = (tu.ocs?.data?.bytes > 0) ? (tu.ocs.data.human ?? '') : ''
-	} catch (e) { /* files_accounting unavailable — leave top-up blank */ }
+	// Home-directory top-up lives in files_accounting (optional app) and is
+	// owner-only there — shown only in the owner Settings tab, so skip it for
+	// non-owners (who would otherwise get a 403).
+	if (props.isOwner) {
+		try {
+			const { data: tu } = await axios.get(`${FA_OCS}/grouptopup`,
+				{ params: { gid: props.gid }, headers: { 'OCS-APIREQUEST': 'true' } })
+			editTopup.value = (tu.ocs?.data?.bytes > 0) ? (tu.ocs.data.human ?? '') : ''
+		} catch (e) { /* files_accounting unavailable — leave top-up blank */ }
+	}
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
