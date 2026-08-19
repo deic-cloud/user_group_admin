@@ -11,8 +11,8 @@
 					<NcAppNavigationCaption :name="t('user_group_admin', 'Pending invitations')" />
 					<NcAppNavigationItem
 						v-for="g in pendingInvitations" :key="'inv-' + g.gid"
-						:name="g.description || g.gid"
-						:title="g.gid">
+						:name="g.gid"
+						:title="g.description || g.gid">
 						<template #actions>
 							<NcActionButton @click="acceptInvitation(g.gid)">
 								<template #icon><JoinIcon :size="20" /></template>
@@ -28,8 +28,8 @@
 				<NcAppNavigationCaption v-if="myGroups.length" :name="t('user_group_admin', 'My groups')" />
 				<NcAppNavigationItem
 					v-for="g in myGroups" :key="g.gid"
-					:name="g.description || g.gid"
-					:title="g.gid"
+					:name="g.gid"
+					:title="g.description || g.gid"
 					:active="selectedGid === g.gid"
 					@click="select(g.gid)">
 					<template #actions>
@@ -43,8 +43,8 @@
 					<NcAppNavigationCaption :name="t('user_group_admin', 'Groups you can join')" />
 					<NcAppNavigationItem
 						v-for="g in joinableGroups" :key="'j-' + g.gid"
-						:name="g.description || g.gid"
-						:title="g.gid">
+						:name="g.gid"
+						:title="g.description || g.gid">
 						<template #actions>
 							<NcActionButton @click="join(g.gid)">
 								<template #icon><JoinIcon :size="20" /></template>
