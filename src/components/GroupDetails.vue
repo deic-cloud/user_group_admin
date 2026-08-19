@@ -27,6 +27,14 @@
 
 		<!-- Members tab -->
 		<div v-if="activeTab === 'members'">
+			<div v-if="invited" class="uga-invite-banner">
+				<p>{{ t('user_group_admin', 'You have been invited to join this group.') }}</p>
+				<div class="uga-invite-banner__actions">
+					<NcButton variant="primary" @click="emit('accept')">{{ t('user_group_admin', 'Accept') }}</NcButton>
+					<NcButton @click="emit('decline')">{{ t('user_group_admin', 'Decline') }}</NcButton>
+				</div>
+			</div>
+
 			<div v-if="pendingOwner === currentUser" class="uga-transfer-offer">
 				<p v-if="groupCommitted">{{ t('user_group_admin', 'You have been offered ownership of this group. Accepting makes you responsible for its storage and billing (committed pool: {c}).', { c: groupCommitted }) }}</p>
 				<p v-else>{{ t('user_group_admin', 'You have been offered ownership of this group. Accepting makes you responsible for its storage and billing.') }}</p>
@@ -75,7 +83,7 @@
 				<p v-if="inviteError" class="uga-error">{{ inviteError }}</p>
 			</template>
 
-			<div v-if="!isOwner" class="uga-leave">
+			<div v-if="!isOwner && !invited" class="uga-leave">
 				<NcButton variant="error" @click="leaveGroup">
 					{{ t('user_group_admin', 'Leave group') }}
 				</NcButton>
@@ -171,9 +179,10 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 const props = defineProps({
 	gid:         { type: String, required: true },
 	isOwner:     { type: Boolean, default: false },
+	invited:     { type: Boolean, default: false },
 	currentUser: { type: String, required: true },
 })
-const emit = defineEmits(['updated', 'deleted'])
+const emit = defineEmits(['updated', 'deleted', 'accept', 'decline'])
 
 // Native (NcDialog) confirmation — replaces window.confirm. askConfirm() resolves
 // true/false so callers keep their `if (!await askConfirm(...)) return` flow.
@@ -497,6 +506,10 @@ onMounted(() => { loadMembers(); loadGroup() })
 	border-radius: var(--border-radius-large, 8px); padding: 12px 16px; margin-bottom: 16px; }
 .uga-transfer-offer p { margin: 0 0 8px; }
 .uga-transfer-offer__actions { display: flex; gap: 8px; }
+.uga-invite-banner { border: 1px solid var(--color-primary-element); background: var(--color-primary-element-light);
+	border-radius: var(--border-radius-large, 8px); padding: 12px 16px; margin-bottom: 16px; }
+.uga-invite-banner p { margin: 0 0 8px; }
+.uga-invite-banner__actions { display: flex; gap: 8px; }
 h3 { font-size: 1em; font-weight: 600; margin: 20px 0 8px; }
 .uga-confirm { margin: 4px 0 8px; }
 </style>

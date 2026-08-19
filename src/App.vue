@@ -12,7 +12,9 @@
 					<NcAppNavigationItem
 						v-for="g in pendingInvitations" :key="'inv-' + g.gid"
 						:name="g.gid"
-						:title="g.description || g.gid">
+						:title="g.description || g.gid"
+						:active="selectedGid === g.gid"
+						@click="selectInvitation(g)">
 						<template #actions>
 							<NcActionButton @click="acceptInvitation(g.gid)">
 								<template #icon><JoinIcon :size="20" /></template>
@@ -71,8 +73,11 @@
 					:gid="selectedGid"
 					:is-owner="isOwnerOf(selectedGid)"
 					:current-user="currentUser"
+					:invited="selectedInvited"
 					@updated="loadMyGroups"
-					@deleted="onDeleted" />
+					@deleted="onDeleted"
+					@accept="onInviteAccept"
+					@decline="onInviteDecline" />
 				<NcEmptyContent v-else
 					:name="t('user_group_admin', 'No group selected')"
 					:description="t('user_group_admin', 'Select a group from the list, or create a new one.')">
@@ -126,6 +131,7 @@ const myGroups          = ref([])
 const pendingInvitations = ref([])
 const joinableGroups    = ref([])
 const selectedGid       = ref(null)
+const selectedInvited   = ref(false)
 const creating          = ref(false)
 const searchQuery       = ref('')
 const joinCandidate     = ref(null)
@@ -236,7 +242,29 @@ async function leave(gid) {
 
 function select(gid) {
 	creating.value = false
+	selectedInvited.value = false
 	selectedGid.value = gid
+}
+
+// Show a pending invitation's group on the right (identity + members, read-only)
+// with Accept / Decline — instead of the nav item being an inert pointer.
+function selectInvitation(g) {
+	creating.value = false
+	selectedGid.value = g.gid
+	selectedInvited.value = true
+}
+
+async function onInviteAccept() {
+	const gid = selectedGid.value
+	selectedInvited.value = false
+	await acceptInvitation(gid)
+}
+
+async function onInviteDecline() {
+	const gid = selectedGid.value
+	await declineInvitation(gid)
+	selectedGid.value = null
+	selectedInvited.value = false
 }
 
 function startCreate() {
