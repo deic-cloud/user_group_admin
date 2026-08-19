@@ -68,7 +68,7 @@
 						:options="userOptions"
 						:loading="searchingUsers"
 						:searchable="true"
-						:placeholder="t('user_group_admin', 'Search for user or enter email…')"
+						:placeholder="t('user_group_admin', 'Search for a user…')"
 						label="label"
 						track-by="uid"
 						class="uga-user-select"
@@ -76,7 +76,16 @@
 					<NcButton :disabled="!inviteUser" @click="inviteByUid">
 						{{ t('user_group_admin', 'Invite user') }}
 					</NcButton>
-					<NcButton :disabled="!isValidEmail(inviteQuery)" @click="inviteByEmail">
+				</div>
+				<div class="uga-add-member">
+					<NcTextField
+						v-model="inviteEmail"
+						type="email"
+						:label="t('user_group_admin', 'Invite an external collaborator by email')"
+						:placeholder="t('user_group_admin', 'name@example.com')"
+						class="uga-email-field"
+						@keyup.enter="inviteByEmail" />
+					<NcButton :disabled="!isValidEmail(inviteEmail)" @click="inviteByEmail">
 						{{ t('user_group_admin', 'Invite via email') }}
 					</NcButton>
 				</div>
@@ -207,6 +216,7 @@ const inviteUser            = ref(null)
 const userOptions           = ref([])
 const searchingUsers        = ref(false)
 const inviteError           = ref('')
+const inviteEmail           = ref('')
 const editDescription       = ref('')
 const groupDescription      = ref('')
 const groupOwner            = ref('')
@@ -317,6 +327,7 @@ function resetInviteForm() {
 	inviteUser.value  = null
 	userOptions.value = []
 	inviteQuery.value = ''
+	inviteEmail.value = ''
 	inviteError.value = ''
 }
 
@@ -337,12 +348,12 @@ async function inviteByUid() {
 }
 
 async function inviteByEmail() {
-	if (!isValidEmail(inviteQuery.value)) return
+	if (!isValidEmail(inviteEmail.value)) return
 	inviteError.value = ''
 	try {
 		await axios.post(
 			`${OCS}/groups/${encodeURIComponent(props.gid)}/members/external`,
-			{ email: inviteQuery.value },
+			{ email: inviteEmail.value },
 			{ headers: { 'OCS-APIREQUEST': 'true' } },
 		)
 		resetInviteForm()
