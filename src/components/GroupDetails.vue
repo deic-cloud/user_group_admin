@@ -145,6 +145,15 @@
 			</div>
 		</div>
 
+		<NcDialog v-if="confirmDialog"
+			:name="confirmDialog.title"
+			@closing="confirmResolve(false)">
+			<p class="uga-confirm">{{ confirmDialog.message }}</p>
+			<template #actions>
+				<NcButton @click="confirmResolve(false)">{{ t('user_group_admin', 'Cancel') }}</NcButton>
+				<NcButton :variant="confirmDialog.variant || 'primary'" @click="confirmResolve(true)">{{ confirmDialog.confirmLabel }}</NcButton>
+			</template>
+		</NcDialog>
 	</div>
 </template>
 
@@ -155,6 +164,7 @@ import { t } from '@nextcloud/l10n'
 import { showError, showSuccess, showWarning } from '@nextcloud/dialogs'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 
@@ -164,6 +174,18 @@ const props = defineProps({
 	currentUser: { type: String, required: true },
 })
 const emit = defineEmits(['updated', 'deleted'])
+
+// Native (NcDialog) confirmation — replaces window.confirm. askConfirm() resolves
+// true/false so callers keep their `if (!await askConfirm(...)) return` flow.
+const confirmDialog = ref(null)
+function askConfirm(opts) {
+	return new Promise(resolve => { confirmDialog.value = { ...opts, resolve } })
+}
+function confirmResolve(val) {
+	const d = confirmDialog.value
+	confirmDialog.value = null
+	d?.resolve(val)
+}
 
 const OCS = '/ocs/v2.php/apps/user_group_admin/api/v1'
 const FA_OCS = '/ocs/v2.php/apps/files_accounting/api/v1'
@@ -324,7 +346,12 @@ async function remove(uid) {
 }
 
 async function leaveGroup() {
-	if (!confirm(t('user_group_admin', 'Leave this group?'))) return
+	if (!await askConfirm({
+		title: t('user_group_admin', 'Leave group'),
+		message: t('user_group_admin', 'Leave this group?'),
+		confirmLabel: t('user_group_admin', 'Leave'),
+		variant: 'error',
+	})) return
 	try {
 		await axios.delete(
 			`${OCS}/groups/${encodeURIComponent(props.gid)}/members/${encodeURIComponent(props.currentUser)}`,
@@ -363,7 +390,12 @@ async function saveSettings() {
 }
 
 async function confirmDelete() {
-	if (!confirm(t('user_group_admin', 'Delete this group? This cannot be undone.'))) return
+	if (!await askConfirm({
+		title: t('user_group_admin', 'Delete group'),
+		message: t('user_group_admin', 'Delete this group? This cannot be undone.'),
+		confirmLabel: t('user_group_admin', 'Delete'),
+		variant: 'error',
+	})) return
 	try {
 		await axios.delete(`${OCS}/groups/${encodeURIComponent(props.gid)}`,
 			{ headers: { 'OCS-APIREQUEST': 'true' } })
@@ -455,4 +487,5 @@ onMounted(() => { loadMembers(); loadGroup() })
 .uga-transfer-offer p { margin: 0 0 8px; }
 .uga-transfer-offer__actions { display: flex; gap: 8px; }
 h3 { font-size: 1em; font-weight: 600; margin: 20px 0 8px; }
+.uga-confirm { margin: 4px 0 8px; }
 </style>
