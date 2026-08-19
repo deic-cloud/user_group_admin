@@ -166,7 +166,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { t } from '@nextcloud/l10n'
 import { showError, showSuccess, showWarning } from '@nextcloud/dialogs'
@@ -467,6 +467,15 @@ async function declineOwnership() {
 		showError(e.response?.data?.ocs?.meta?.message ?? t('user_group_admin', 'Failed to decline'))
 	}
 }
+
+// When an invitation is accepted the 'invited' prop flips false — flip my own
+// row to Active in place (reactive, no reload / re-fetch).
+watch(() => props.invited, (now, was) => {
+	if (was && !now) {
+		const me = members.value.find(m => m.uid === props.currentUser)
+		if (me) { me.status = 1 }
+	}
+})
 
 onMounted(() => { loadMembers(); loadGroup() })
 </script>

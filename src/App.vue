@@ -163,6 +163,7 @@ async function acceptInvitation(gid) {
 			{}, { headers: { 'OCS-APIREQUEST': 'true' } })
 		await loadMyGroups()
 		selectedGid.value = gid
+		selectedInvited.value = false // now a member — flip GroupDetails to the normal (member) view
 	} catch (e) {
 		showError(e.response?.data?.ocs?.meta?.message ?? t('user_group_admin', 'Failed to accept invitation'))
 	}
@@ -254,10 +255,8 @@ function selectInvitation(g) {
 	selectedInvited.value = true
 }
 
-async function onInviteAccept() {
-	const gid = selectedGid.value
-	selectedInvited.value = false
-	await acceptInvitation(gid)
+function onInviteAccept() {
+	acceptInvitation(selectedGid.value)
 }
 
 async function onInviteDecline() {
