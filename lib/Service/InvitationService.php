@@ -68,7 +68,7 @@ class InvitationService {
 
 		$member = new GroupMember();
 		$member->setGid($gid);
-		$member->setUid(GroupMember::EXTERNAL_UID);
+		$member->setUid($email); // the email IS the pending uid (distinct per invite; swapped to a real uid on login)
 		$member->setStatus(GroupMember::STATUS_PENDING);
 		$member->setAcceptToken($acceptToken);
 		$member->setDeclineToken($declineToken);
@@ -100,7 +100,7 @@ class InvitationService {
 		}
 
 		if ($member->getStatus() !== GroupMember::STATUS_PENDING
-			|| $member->getUid() !== GroupMember::EXTERNAL_UID) {
+			|| $member->getInvitationEmail() === '') {
 			throw new \RuntimeException('This invitation has already been used');
 		}
 

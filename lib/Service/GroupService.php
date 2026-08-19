@@ -523,12 +523,23 @@ class GroupService {
 			$this->publishActivity('member_removed', ['gid' => $gid, 'uid' => $email], $callerUid, $callerUid);
 			return;
 		}
+		// An external (email-invited) collaborator exists only for its group(s): note it
+		// so we can disable the account once it leaves its last group.
+		$wasExternal = false;
+		try {
+			$m = $this->memberMapper->findByGidUid($gid, $targetUid);
+			$wasExternal = $m->getInvitationEmail() !== '' && $m->getStatus() === GroupMember::STATUS_ACCEPTED;
+		} catch (\Throwable) {}
+
 		$this->memberMapper->deleteByGidUid($gid, $targetUid);
 		$user = $this->userManager->get($targetUid);
 		if ($user !== null) {
 			$this->groupManager->get($gid)?->removeUser($user);
 		}
 		$this->syncService->removeMemberOnAllSilos($gid, $targetUid);
+		if ($wasExternal && $user !== null && count($this->memberMapper->findByUid($targetUid)) === 0) {
+			$user->setEnabled(false); // no longer in any group — disable the external account
+		}
 		$this->membersChanged($gid);
 		$this->dismissInvitationNotification($gid, $targetUid);
 		$this->dismissJoinRequestNotification($gid, $targetUid, $owner);

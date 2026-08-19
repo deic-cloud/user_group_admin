@@ -265,8 +265,7 @@ class InternalController extends Controller {
 			fn ($m) => $m->getUid(),
 			array_filter(
 				$this->memberMapper->findByGid($gid),
-				fn ($m) => $m->getStatus() === GroupMember::STATUS_ACCEPTED
-					&& $m->getUid() !== GroupMember::EXTERNAL_UID,
+				fn ($m) => $m->getStatus() === GroupMember::STATUS_ACCEPTED,
 			),
 		);
 
@@ -282,7 +281,7 @@ class InternalController extends Controller {
 		$uid    = $data['uid'] ?? '';
 		$status = (int)($data['status'] ?? GroupMember::STATUS_ACCEPTED);
 
-		if ($uid === '' || $uid === GroupMember::EXTERNAL_UID) return;
+		if ($uid === '' || ($data['invitation_email'] ?? '') !== '') return; // external invitees are notified by email, not in-app
 
 		$owner = '';
 		try {

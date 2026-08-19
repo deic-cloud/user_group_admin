@@ -218,7 +218,7 @@ const quotaTotalOptions     = QUOTA_TOTAL_OPTIONS.map(v => ({ id: v, label: v })
 // Active members (excluding external invites and the current user) — candidates
 // to receive ownership.
 const transferOptions = computed(() => members.value
-	.filter(m => m.status === 1 && m.uid !== 'uga_external' && m.uid !== props.currentUser)
+	.filter(m => m.status === 1 && !m.invitation_email && m.uid !== props.currentUser)
 	.map(m => ({ uid: m.uid, label: m.uid })))
 
 const ownerLabel = computed(() => (groupOwnerName.value && groupOwnerName.value !== groupOwner.value)
@@ -233,13 +233,13 @@ const STATUS_LABELS = {
 }
 function statusLabel(s) { return STATUS_LABELS[s] ?? String(s) }
 function memberStatus(m) {
-	if (m.uid === 'uga_external' && m.status === -1) {
+	if (m.invitation_email && m.status === -1) {
 		return t('user_group_admin', 'Email invitation sent')
 	}
 	return statusLabel(m.status)
 }
 function memberLabel(m) {
-	if (m.uid === 'uga_external') { return m.invitation_email }
+	if (m.invitation_email && m.status !== 1) { return m.invitation_email }
 	return m.display_name && m.display_name !== m.uid ? `${m.display_name} (${m.uid})` : m.uid
 }
 

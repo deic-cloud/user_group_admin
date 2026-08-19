@@ -36,7 +36,8 @@ class GroupController extends OCSController {
 
 	private function withMemberName(array $m): array {
 		$uid = (string)($m['uid'] ?? '');
-		if ($uid !== '' && $uid !== 'uga_external') {
+		$pendingInvite = ($m['invitation_email'] ?? '') !== '' && (int)($m['status'] ?? 1) === -1;
+		if ($uid !== '' && !$pendingInvite) {
 			$m['display_name'] = $this->syncService->resolveDisplayName($uid);
 		}
 		return $m;
