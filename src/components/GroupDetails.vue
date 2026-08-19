@@ -45,7 +45,7 @@
 						<NcButton v-if="m.status === 0" size="small" @click="approve(m.uid)">
 							{{ t('user_group_admin', 'Approve') }}
 						</NcButton>
-						<NcButton size="small" variant="error" @click="remove(m.uid)">
+						<NcButton size="small" variant="error" @click="remove(m.uid, m.invitation_email)">
 							{{ t('user_group_admin', 'Remove') }}
 						</NcButton>
 					</div>
@@ -349,9 +349,9 @@ async function approve(uid) {
 	loadMembers()
 }
 
-async function remove(uid) {
+async function remove(uid, email = '') {
 	await axios.delete(`${OCS}/groups/${encodeURIComponent(props.gid)}/members/${encodeURIComponent(uid)}`,
-		{ headers: { 'OCS-APIREQUEST': 'true' } })
+		{ params: email ? { email } : {}, headers: { 'OCS-APIREQUEST': 'true' } })
 	loadMembers()
 }
 

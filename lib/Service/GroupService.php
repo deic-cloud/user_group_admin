@@ -502,7 +502,7 @@ class GroupService {
 		}
 	}
 
-	public function removeMember(string $callerUid, string $gid, string $targetUid): void {
+	public function removeMember(string $callerUid, string $gid, string $targetUid, string $email = ''): void {
 		$group = $this->getGroup($gid);
 		$isOwner = $group->getOwner() === $callerUid;
 		$isSelf  = $callerUid === $targetUid;
@@ -515,6 +515,14 @@ class GroupService {
 		}
 
 		$owner = $group->getOwner();
+		if ($email !== '' && $targetUid === GroupMember::EXTERNAL_UID) {
+			// Cancel one specific pending email invitation (all share EXTERNAL_UID).
+			$this->memberMapper->deleteByGidEmail($gid, $email);
+			$this->syncService->removeMemberOnAllSilos($gid, $targetUid, $email);
+			$this->membersChanged($gid);
+			$this->publishActivity('member_removed', ['gid' => $gid, 'uid' => $email], $callerUid, $callerUid);
+			return;
+		}
 		$this->memberMapper->deleteByGidUid($gid, $targetUid);
 		$user = $this->userManager->get($targetUid);
 		if ($user !== null) {

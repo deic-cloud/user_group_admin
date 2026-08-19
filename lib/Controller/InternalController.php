@@ -168,8 +168,17 @@ class InternalController extends Controller {
 	 */
 	#[PublicPage]
 	#[NoCSRFRequired]
-	public function deleteMember(string $gid, string $uid): JSONResponse {
+	public function deleteMember(string $gid, string $uid, string $email = ''): JSONResponse {
 		if ($err = $this->checkSecret()) return $err;
+
+		if ($email !== '') {
+			$this->memberMapper->deleteByGidEmail($gid, $email);
+			if ($this->shardingService->isMaster()) {
+				$this->syncService->removeMemberOnAllSilos($gid, $uid, $email);
+			}
+			$this->membersChanged($gid);
+			return new JSONResponse(['success' => true]);
+		}
 
 		$this->memberMapper->deleteByGidUid($gid, $uid);
 		$ncGroup = $this->groupManager->get($gid);

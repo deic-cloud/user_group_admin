@@ -103,6 +103,16 @@ class GroupMemberMapper extends QBMapper {
 		$qb->executeStatement();
 	}
 
+	/** Delete one specific pending email invitation (all share EXTERNAL_UID). */
+	public function deleteByGidEmail(string $gid, string $email): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+		   ->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
+		   ->andWhere($qb->expr()->eq('uid', $qb->createNamedParameter(GroupMember::EXTERNAL_UID)))
+		   ->andWhere($qb->expr()->eq('invitation_email', $qb->createNamedParameter($email)));
+		$qb->executeStatement();
+	}
+
 	/** @return GroupMember[] all members across all groups (for silo sync) */
 	public function findAll(): array {
 		$qb = $this->db->getQueryBuilder();

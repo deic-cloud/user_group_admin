@@ -172,9 +172,9 @@ class GroupController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	public function removeMember(string $gid, string $uid): DataResponse {
+	public function removeMember(string $gid, string $uid, string $email = ''): DataResponse {
 		try {
-			$this->groupService->removeMember($this->uid(), $gid, $uid);
+			$this->groupService->removeMember($this->uid(), $gid, $uid, $email);
 			return $this->ok();
 		} catch (\RuntimeException $e) {
 			return $this->err($e->getMessage());

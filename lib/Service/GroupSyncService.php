@@ -68,8 +68,11 @@ class GroupSyncService {
 	}
 
 	/** Tell all peers to remove a member from a group. */
-	public function removeMemberOnAllSilos(string $gid, string $uid): void {
+	public function removeMemberOnAllSilos(string $gid, string $uid, string $email = ''): void {
 		$path = 'internal/groups/' . urlencode($gid) . '/members/' . urlencode($uid) . '/delete';
+		if ($email !== '') {
+			$path .= '?email=' . urlencode($email);
+		}
 		foreach ($this->syncTargets() as $url) {
 			$this->post($url, $path);
 		}
