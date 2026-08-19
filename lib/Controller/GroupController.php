@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace OCA\UserGroupAdmin\Controller;
 
+use OCA\UserGroupAdmin\Db\Group;
 use OCA\UserGroupAdmin\Service\GroupService;
 use OCA\UserGroupAdmin\Service\InvitationService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
+use OCP\IUserManager;
 use OCP\IUserSession;
 
 class GroupController extends OCSController {
@@ -19,12 +21,21 @@ class GroupController extends OCSController {
 		private GroupService      $groupService,
 		private InvitationService $invitationService,
 		private IUserSession      $userSession,
+		private IUserManager      $userManager,
 	) {
 		parent::__construct($appName, $request);
 	}
 
 	private function uid(): string {
 		return $this->userSession->getUser()->getUID();
+	}
+
+	private function withOwnerName(array $g): array {
+		$owner = (string)($g['owner'] ?? '');
+		$g['owner_display_name'] = ($owner === '' || $owner === Group::HIDDEN_OWNER)
+			? ''
+			: ($this->userManager->get($owner)?->getDisplayName() ?? $owner);
+		return $g;
 	}
 
 	private function ok(mixed $data = []): DataResponse {
@@ -40,19 +51,19 @@ class GroupController extends OCSController {
 	#[NoAdminRequired]
 	public function listInvitations(): DataResponse {
 		$groups = $this->groupService->listPendingInvitations($this->uid());
-		return $this->ok(array_map(fn ($g) => $g->toArray(), $groups));
+		return $this->ok(array_map(fn ($g) => $this->withOwnerName($g->toArray()), $groups));
 	}
 
 	#[NoAdminRequired]
 	public function listGroups(): DataResponse {
 		$groups = $this->groupService->listGroupsForUser($this->uid());
-		return $this->ok(array_map(fn ($g) => $g->toArray(), $groups));
+		return $this->ok(array_map(fn ($g) => $this->withOwnerName($g->toArray()), $groups));
 	}
 
 	#[NoAdminRequired]
 	public function searchJoinable(string $q = ''): DataResponse {
 		$groups = $this->groupService->searchJoinable($this->uid(), $q);
-		return $this->ok(array_map(fn ($g) => $g->toArray(), $groups));
+		return $this->ok(array_map(fn ($g) => $this->withOwnerName($g->toArray()), $groups));
 	}
 
 	#[NoAdminRequired]
@@ -64,7 +75,7 @@ class GroupController extends OCSController {
 	#[NoAdminRequired]
 	public function getGroup(string $gid): DataResponse {
 		try {
-			return $this->ok($this->groupService->getGroup($gid)->toArray());
+			return $this->ok($this->withOwnerName($this->groupService->getGroup($gid)->toArray()));
 		} catch (\RuntimeException $e) {
 			return $this->err($e->getMessage(), 404);
 		}

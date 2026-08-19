@@ -43,10 +43,11 @@
 					<NcAppNavigationCaption :name="t('user_group_admin', 'Groups you can join')" />
 					<NcAppNavigationItem
 						v-for="g in joinableGroups" :key="'j-' + g.gid"
-						:name="g.gid + '  —  ' + g.owner"
-						:title="g.description || g.gid">
+						:name="joinableName(g)"
+						:title="g.description || g.gid"
+						@click="confirmJoin(g)">
 						<template #actions>
-							<NcActionButton @click="join(g.gid)">
+							<NcActionButton @click="confirmJoin(g)">
 								<template #icon><JoinIcon :size="20" /></template>
 								{{ t('user_group_admin', 'Join') }}
 							</NcActionButton>
@@ -182,6 +183,21 @@ async function join(gid) {
 	} catch (e) {
 		showError(e.response?.data?.ocs?.meta?.message ?? t('user_group_admin', 'Failed to join group'))
 	}
+}
+
+function joinableName(g) {
+	const dn = g.owner_display_name
+	const owner = dn && dn !== g.owner ? `${g.owner}, ${dn}` : g.owner
+	return `${g.gid} (${t('user_group_admin', 'owner: {owner}', { owner })})`
+}
+
+function confirmJoin(g) {
+	const dn = g.owner_display_name
+	const who = dn && dn !== g.owner ? `${dn} (${g.owner})` : g.owner
+	let msg = t('user_group_admin', 'Join group "{gid}"?', { gid: g.gid })
+		+ '\n' + t('user_group_admin', 'Owner: {who}', { who })
+	if (g.description) { msg += '\n' + t('user_group_admin', 'Description: {desc}', { desc: g.description }) }
+	if (window.confirm(msg)) { join(g.gid) }
 }
 
 async function leave(gid) {

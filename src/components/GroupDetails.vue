@@ -8,7 +8,7 @@
 			</div>
 			<div v-if="groupOwner" class="uga-identity__row">
 				<span class="uga-identity__label">{{ t('user_group_admin', 'Owner') }}:</span>
-				<span class="uga-identity__desc">{{ groupOwner }}</span>
+				<span class="uga-identity__desc">{{ ownerLabel }}</span>
 			</div>
 			<div v-if="groupDescription" class="uga-identity__row">
 				<span class="uga-identity__label">{{ t('user_group_admin', 'Description') }}:</span>
@@ -179,6 +179,7 @@ const inviteError           = ref('')
 const editDescription       = ref('')
 const groupDescription      = ref('')
 const groupOwner            = ref('')
+const groupOwnerName        = ref('')
 const editOpen              = ref(false)
 const editPrivate           = ref(false)
 const editStorageGrant      = ref('none')
@@ -197,6 +198,10 @@ const quotaTotalOptions     = QUOTA_TOTAL_OPTIONS.map(v => ({ id: v, label: v })
 const transferOptions = computed(() => members.value
 	.filter(m => m.status === 1 && m.uid !== 'uga_external' && m.uid !== props.currentUser)
 	.map(m => ({ uid: m.uid, label: m.uid })))
+
+const ownerLabel = computed(() => (groupOwnerName.value && groupOwnerName.value !== groupOwner.value)
+	? `${groupOwnerName.value} (${groupOwner.value})`
+	: groupOwner.value)
 
 const STATUS_LABELS = {
 	[-1]: t('user_group_admin', 'Invited'),
@@ -219,6 +224,7 @@ async function loadGroup() {
 	editDescription.value  = g.description ?? ''
 	groupDescription.value = g.description ?? ''
 	groupOwner.value = g.owner ?? ''
+	groupOwnerName.value = g.owner_display_name ?? ''
 	editOpen.value         = !!g.open
 	editPrivate.value      = !!g.private
 	const grantId = g.storage_grant || 'none'
