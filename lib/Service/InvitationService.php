@@ -262,7 +262,7 @@ class InvitationService {
 
 		$body = implode("\n\n", [
 			"{$ownerName} has invited you to join the group '{$gid}'.",
-			"Accept the invitation and create your account: {$acceptUrl}",
+			"Accept the invitation: {$acceptUrl}",
 			"Decline the invitation: {$declineUrl}",
 		]);
 
