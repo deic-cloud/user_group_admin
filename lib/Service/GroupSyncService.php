@@ -40,7 +40,7 @@ class GroupSyncService {
 
 	/** Push a full group record + its current member list to all peers. */
 	public function pushGroupToAllSilos(Group $group, array $members): void {
-		$memberData = array_map(fn (GroupMember $m) => json_encode($m->toArray()), $members);
+		$memberData = array_map(fn (GroupMember $m) => json_encode($m->toSyncArray()), $members);
 		$payload    = ['group' => json_encode($group->toArray()), 'members' => json_encode($memberData)];
 		foreach ($this->syncTargets() as $url) {
 			if (!$this->post($url, 'internal/groups/sync', $payload)) {
@@ -59,7 +59,7 @@ class GroupSyncService {
 	/** Push a single membership record to all peers. */
 	public function pushMemberToAllSilos(GroupMember $member): void {
 		$path    = 'internal/groups/' . urlencode($member->getGid()) . '/members/sync';
-		$payload = ['member' => json_encode($member->toArray())];
+		$payload = ['member' => json_encode($member->toSyncArray())];
 		foreach ($this->syncTargets() as $url) {
 			if (!$this->post($url, $path, $payload)) {
 				$this->logger->error("user_group_admin: failed to sync member to {$url}");

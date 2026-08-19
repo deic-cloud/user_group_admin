@@ -59,4 +59,16 @@ class GroupMember extends Entity {
 			'storage_used'     => $this->storageUsed,
 		];
 	}
+
+	/**
+	 * Like toArray() but includes the accept/decline tokens. For TRUSTED inter-server
+	 * sync only (shared-secret channel) — never the client-facing OCS API, which must
+	 * not leak invitation tokens.
+	 */
+	public function toSyncArray(): array {
+		return $this->toArray() + [
+			'accept_token'  => $this->acceptToken,
+			'decline_token' => $this->declineToken,
+		];
+	}
 }

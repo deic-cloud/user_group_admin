@@ -248,6 +248,8 @@ class InternalController extends Controller {
 		$m->setStatus((int)($data['status'] ?? GroupMember::STATUS_ACCEPTED));
 		$m->setInvitationEmail($data['invitation_email'] ?? '');
 		$m->setStorageUsed((int)($data['storage_used'] ?? 0));
+		$m->setAcceptToken($data['accept_token'] ?? '');
+		$m->setDeclineToken($data['decline_token'] ?? '');
 
 		if ($m->getId() === null) {
 			$this->memberMapper->insert($m);
