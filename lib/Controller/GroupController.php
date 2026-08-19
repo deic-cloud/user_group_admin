@@ -34,6 +34,14 @@ class GroupController extends OCSController {
 		return $g;
 	}
 
+	private function withMemberName(array $m): array {
+		$uid = (string)($m['uid'] ?? '');
+		if ($uid !== '' && $uid !== 'uga_external') {
+			$m['display_name'] = $this->syncService->resolveDisplayName($uid);
+		}
+		return $m;
+	}
+
 	private function ok(mixed $data = []): DataResponse {
 		return new DataResponse($data);
 	}
@@ -127,7 +135,7 @@ class GroupController extends OCSController {
 	#[NoAdminRequired]
 	public function listMembers(string $gid): DataResponse {
 		$members = $this->groupService->listMembers($gid);
-		return $this->ok(array_map(fn ($m) => $m->toArray(), $members));
+		return $this->ok(array_map(fn ($m) => $this->withMemberName($m->toArray()), $members));
 	}
 
 	/** Invite an existing NC user or request to join an open group. */

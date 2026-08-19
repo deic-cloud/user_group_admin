@@ -39,7 +39,7 @@
 			<h3>{{ t('user_group_admin', 'Members') }}</h3>
 			<ul class="uga-member-list">
 				<li v-for="m in members" :key="m.uid + m.invitation_email" class="uga-member">
-					<span class="uga-member__uid">{{ m.uid === 'uga_external' ? m.invitation_email : m.uid }}</span>
+					<span class="uga-member__uid">{{ memberLabel(m) }}</span>
 					<span class="uga-member__status">{{ statusLabel(m.status) }}</span>
 					<div class="uga-member__actions" v-if="isOwner">
 						<NcButton v-if="m.status === 0" size="small" @click="approve(m.uid)">
@@ -232,6 +232,10 @@ const STATUS_LABELS = {
 	  2:  t('user_group_admin', 'Declined'),
 }
 function statusLabel(s) { return STATUS_LABELS[s] ?? String(s) }
+function memberLabel(m) {
+	if (m.uid === 'uga_external') { return m.invitation_email }
+	return m.display_name && m.display_name !== m.uid ? `${m.display_name} (${m.uid})` : m.uid
+}
 
 async function loadMembers() {
 	const { data } = await axios.get(`${OCS}/groups/${encodeURIComponent(props.gid)}/members`,
