@@ -202,11 +202,12 @@ class InvitationService {
 		if ($mine === '' || $mine !== strtolower($member->getInvitationEmail())) {
 			throw new \RuntimeException('This invitation was sent to a different email address than the account you are logged in with.');
 		}
-		$gid = $member->getGid();
+		$gid   = $member->getGid();
+		$email = $member->getInvitationEmail();
 		// If they are already a member under their real uid, just drop the pending row.
 		try { $already = $this->memberMapper->findByGidUid($gid, $loggedInUid); } catch (DoesNotExistException) { $already = null; }
 		if ($already !== null) {
-			$this->memberMapper->deleteByGidUid($gid, $member->getInvitationEmail());
+			$this->memberMapper->deleteByGidEmail($gid, $email);
 		} else {
 			$member->setUid($loggedInUid);
 			$member->setInvitationEmail(''); // now a normal member, not an external account
@@ -216,6 +217,10 @@ class InvitationService {
 			$this->memberMapper->update($member);
 			$this->syncService->pushMemberToAllSilos($member);
 		}
+		// Purge the pending uid=email invite row on every peer. The swap only renamed
+		// OUR local row; peers still hold the original invite row (uid=email) and would
+		// otherwise keep showing a stale pending invitation for a member who has joined.
+		$this->syncService->removeMemberOnAllSilos($gid, $email, $email);
 		$this->groupManager->get($gid)?->addUser($user);
 		return $gid;
 	}
