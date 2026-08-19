@@ -1,1 +1,8 @@
 /* user_group_admin app styles — component-level styles live in Vue SFCs */
+
+/* NcContent (bundled @nextcloud/vue 8.x) adds `margin-top: var(--header-height)`
+   so it can sit below a FIXED header. But NC34's core layout already offsets the
+   app area below the header, so the offset lands twice — an oversized gap under
+   the top bar, unique to this app. We mount inside core's #content, so drop
+   NcContent's own header offset. (id+class outranks its scoped .content[data-v-…].) */
+#content-vue.content { margin-top: 0; }
