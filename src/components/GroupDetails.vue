@@ -2,8 +2,14 @@
 	<div class="uga-details">
 		<!-- Group identity — the gid is the WebDAV path segment for grant folders; shown to all members -->
 		<div class="uga-identity">
-			<span class="uga-identity__label">{{ t('user_group_admin', 'Group ID') }}:</span>
-			<code class="uga-identity__value" :title="t('user_group_admin', 'Used in WebDAV paths for grant folders')">{{ gid }}</code>
+			<div class="uga-identity__row">
+				<span class="uga-identity__label">{{ t('user_group_admin', 'Group ID') }}:</span>
+				<code class="uga-identity__value" :title="t('user_group_admin', 'Used in WebDAV paths for grant folders')">{{ gid }}</code>
+			</div>
+			<div v-if="groupDescription" class="uga-identity__row">
+				<span class="uga-identity__label">{{ t('user_group_admin', 'Description') }}:</span>
+				<span class="uga-identity__desc">{{ groupDescription }}</span>
+			</div>
 		</div>
 		<!-- Tab bar -->
 		<div class="uga-tabs">
@@ -167,6 +173,7 @@ const userOptions           = ref([])
 const searchingUsers        = ref(false)
 const inviteError           = ref('')
 const editDescription       = ref('')
+const groupDescription      = ref('')
 const editOpen              = ref(false)
 const editPrivate           = ref(false)
 const editStorageGrant      = ref('none')
@@ -205,6 +212,7 @@ async function loadGroup() {
 		{ headers: { 'OCS-APIREQUEST': 'true' } })
 	const g = data.ocs?.data ?? {}
 	editDescription.value  = g.description ?? ''
+	groupDescription.value = g.description ?? ''
 	editOpen.value         = !!g.open
 	editPrivate.value      = !!g.private
 	const grantId = g.storage_grant || 'none'
@@ -334,6 +342,7 @@ async function saveSettings() {
 				{ gid: props.gid, quota: (editTopup.value || '').trim() || '0' },
 				{ headers: { 'OCS-APIREQUEST': 'true' } })
 		} catch (e) { /* files_accounting unavailable — group settings still saved */ }
+		groupDescription.value = editDescription.value
 		showSuccess(t('user_group_admin', 'Group updated'))
 		emit('updated')
 	} catch (e) {
@@ -403,12 +412,14 @@ onMounted(() => { loadMembers(); loadGroup() })
 /* padding-bottom gives the last row (Save / Delete) clearance inside the dialog's
    scroll area — without it the buttons are clipped at the bottom on shorter windows. */
 .uga-details { min-height: 300px; padding-bottom: 40px; }
-.uga-identity { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
-.uga-identity__label { color: var(--color-text-maxcontrast); font-size: .9em; }
+.uga-identity { margin-bottom: 16px; }
+.uga-identity__row { display: flex; align-items: baseline; gap: 8px; margin: 2px 0; }
+.uga-identity__label { color: var(--color-text-maxcontrast); font-size: .9em; min-width: 6em; }
 .uga-identity__value { font-family: var(--font-face-monospace, monospace);
 	background: var(--color-background-dark); padding: 1px 6px;
 	border-radius: var(--border-radius, 4px); user-select: all; }
-.uga-field { margin: 8px 0 16px; }
+.uga-identity__desc { word-break: break-word; }
+.uga-field { margin: 20px 0 20px; }
 .uga-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--color-border); margin-bottom: 16px; }
 .uga-tabs button { padding: 8px 16px; border: none; background: none; cursor: pointer;
 	border-bottom: 2px solid transparent; color: var(--color-text-maxcontrast); }
