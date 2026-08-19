@@ -45,10 +45,12 @@ class SignupController extends Controller {
 
 	/** Render the 'log in to accept' page for an invite whose email is an existing user. */
 	private function loginToAccept(string $token, array $info, string $error = ''): TemplateResponse {
+		// Link straight to the session-authed accept endpoint. If the visitor isn't
+		// logged in, NC's auth middleware redirects them to login and back here
+		// automatically (a hand-built redirect_url isn't honoured reliably).
 		$acceptUrl = $this->urlGenerator->linkToRouteAbsolute('user_group_admin.signup.acceptAsUser', ['token' => $token]);
-		$loginUrl  = $this->urlGenerator->linkToRoute('core.login.showLoginForm', ['redirect_url' => $acceptUrl]);
 		return new TemplateResponse('user_group_admin', 'signup_login',
-			['email' => $info['email'], 'gid' => $info['gid'], 'loginUrl' => $loginUrl, 'error' => $error], 'guest');
+			['email' => $info['email'], 'gid' => $info['gid'], 'acceptUrl' => $acceptUrl, 'error' => $error], 'guest');
 	}
 
 	/** Accept an email invite as a logged-in existing user (uid swap; no new account). */

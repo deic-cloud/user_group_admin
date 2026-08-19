@@ -8,7 +8,7 @@
 		<p class="uga-signup-error"><?php p($_['error']) ?></p>
 	<?php endif ?>
 
-	<a href="<?php p($_['loginUrl']) ?>" class="button-vue button-vue--vue-primary uga-signup-submit">
+	<a href="<?php p($_['acceptUrl']) ?>" class="button-vue button-vue--vue-primary uga-signup-submit">
 		<?php p($l->t('Log in to accept')) ?>
 	</a>
 </div>
