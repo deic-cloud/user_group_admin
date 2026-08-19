@@ -31,7 +31,7 @@
 
 	<p class="uga-signup-login-hint">
 		<?php p($l->t('Already have an account?')) ?>
-		<a href="<?php p(\OCP\Util::linkToRoute('core.login.showLoginForm')) ?>">
+		<a href="<?php p(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('core.login.showLoginForm')) ?>">
 			<?php p($l->t('Log in')) ?>
 		</a>
 	</p>
