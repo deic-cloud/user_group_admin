@@ -46,8 +46,9 @@ class SignupController extends Controller {
 	/** Render the 'log in to accept' page for an invite whose email is an existing user. */
 	private function loginToAccept(string $token, array $info, string $error = ''): TemplateResponse {
 		// Link straight to the session-authed accept endpoint. If the visitor isn't
-		// logged in, NC's auth middleware redirects them to login and back here
-		// automatically (a hand-built redirect_url isn't honoured reliably).
+		// logged in, acceptAsUser redirects them to the login form with a redirect_url
+		// pointing back at itself; that redirect_url is honoured and survives the
+		// files_sharding SSO hop to the user's home silo, landing them back on accept.
 		$acceptUrl = $this->urlGenerator->linkToRouteAbsolute('user_group_admin.signup.acceptAsUser', ['token' => $token]);
 		return new TemplateResponse('user_group_admin', 'signup_login',
 			['email' => $info['email'], 'gid' => $info['gid'], 'acceptUrl' => $acceptUrl, 'error' => $error], 'guest');
@@ -63,8 +64,12 @@ class SignupController extends Controller {
 			return new RedirectResponse($this->urlGenerator->linkToRoute('core.login.showLoginForm', ['redirect_url' => $acceptUrl]));
 		}
 		try {
-			$this->invitationService->acceptAsExistingUser($token, $uid);
-			return new TemplateResponse('user_group_admin', 'signup_success', [], 'guest');
+			$gid = $this->invitationService->acceptAsExistingUser($token, $uid);
+			// Send the invitee straight to the group's view in user_group_admin,
+			// like the old ownCloud app did.
+			$target = $this->urlGenerator->linkToRoute('user_group_admin.page.index')
+				. '?group=' . urlencode($gid);
+			return new RedirectResponse($target);
 		} catch (\RuntimeException $e) {
 			$info = $this->invitationService->describeInvite($token);
 			if ($info !== null) {

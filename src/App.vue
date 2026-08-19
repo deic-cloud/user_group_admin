@@ -285,7 +285,13 @@ function onDeleted() {
 	loadMyGroups()
 }
 
-onMounted(loadMyGroups)
+onMounted(async () => {
+	await loadMyGroups()
+	// Deep link: /apps/user_group_admin?group=<gid> opens that group directly
+	// (used when an invitee is redirected here after accepting).
+	const g = new URLSearchParams(window.location.search).get('group')
+	if (g) select(g)
+})
 </script>
 
 <style scoped>
