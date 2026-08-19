@@ -28,6 +28,7 @@ class GroupService {
 		private IActivityManager      $activityManager,
 		private LoggerInterface       $logger,
 		private \OCP\EventDispatcher\IEventDispatcher $eventDispatcher,
+		private \OCP\IConfig $config,
 	) {}
 
 	/** Signal that a group's accepted membership changed (see GroupMembersChangedEvent). */
@@ -525,11 +526,10 @@ class GroupService {
 		}
 		// An external (email-invited) collaborator exists only for its group(s): note it
 		// so we can disable the account once it leaves its last group.
-		$wasExternal = false;
-		try {
-			$m = $this->memberMapper->findByGidUid($gid, $targetUid);
-			$wasExternal = $m->getInvitationEmail() !== '' && $m->getStatus() === GroupMember::STATUS_ACCEPTED;
-		} catch (\Throwable) {}
+		// External collaborators are tied to the group that created them: that group's
+		// owner vouched for (and is legally responsible for) the person, so removal from
+		// the CREATING group disables the account — regardless of other memberships.
+		$isCreatingGroup = $this->config->getUserValue($targetUid, 'user_group_admin', 'external_group', '') === $gid;
 
 		$this->memberMapper->deleteByGidUid($gid, $targetUid);
 		$user = $this->userManager->get($targetUid);
@@ -537,8 +537,8 @@ class GroupService {
 			$this->groupManager->get($gid)?->removeUser($user);
 		}
 		$this->syncService->removeMemberOnAllSilos($gid, $targetUid);
-		if ($wasExternal && $user !== null && count($this->memberMapper->findByUid($targetUid)) === 0) {
-			$user->setEnabled(false); // no longer in any group — disable the external account
+		if ($isCreatingGroup && $user !== null) {
+			$user->setEnabled(false); // removed from the group that vouches for it
 		}
 		$this->membersChanged($gid);
 		$this->dismissInvitationNotification($gid, $targetUid);

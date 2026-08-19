@@ -50,11 +50,6 @@ class InvitationService {
 			throw new \RuntimeException('Only the group owner can invite external collaborators');
 		}
 
-		// Reject if a user with this email already exists.
-		if ($this->userManager->getByEmail($email) !== []) {
-			throw new \RuntimeException('A user with this email already exists; invite them by username instead');
-		}
-
 		// Reject if already invited.
 		$existing = $this->memberMapper->findByGid($gid);
 		foreach ($existing as $m) {
@@ -153,6 +148,8 @@ class InvitationService {
 
 		// Track curator relationship (owner is responsible for this external user).
 		$this->config->setUserValue($owner, 'user_group_admin', 'curator_' . $uid, '1');
+		// Record the creating group so removal from it disables this external account.
+		$this->config->setUserValue($uid, 'user_group_admin', 'external_group', $gid);
 
 		return $uid;
 	}
@@ -160,6 +157,69 @@ class InvitationService {
 	/**
 	 * Process a decline token — mark invitation as declined.
 	 */
+	/**
+	 * Describe a pending email invite for the accept page: email, group, and whether
+	 * the address already belongs to an enabled account (→ log-in-to-accept path).
+	 * @return array{email:string,gid:string,existingUser:bool}|null
+	 */
+	public function describeInvite(string $acceptToken): ?array {
+		try {
+			$member = $this->memberMapper->findByAcceptToken($acceptToken);
+		} catch (DoesNotExistException) {
+			return null;
+		}
+		if ($member->getStatus() !== GroupMember::STATUS_PENDING || $member->getInvitationEmail() === '') {
+			return null;
+		}
+		$email = $member->getInvitationEmail();
+		$existing = false;
+		foreach ($this->userManager->getByEmail($email) as $u) {
+			if ($u->isEnabled()) { $existing = true; break; }
+		}
+		return ['email' => $email, 'gid' => $member->getGid(), 'existingUser' => $existing];
+	}
+
+	/**
+	 * Accept an email invite as an already-logged-in existing user: swap the pending
+	 * uid=email membership to the real uid (no new account). The logged-in user's
+	 * email MUST match the invitation — only the invited person may accept.
+	 * @throws \RuntimeException
+	 */
+	public function acceptAsExistingUser(string $acceptToken, string $loggedInUid): string {
+		try {
+			$member = $this->memberMapper->findByAcceptToken($acceptToken);
+		} catch (DoesNotExistException) {
+			throw new \RuntimeException('Invalid or expired invitation link');
+		}
+		if ($member->getStatus() !== GroupMember::STATUS_PENDING || $member->getInvitationEmail() === '') {
+			throw new \RuntimeException('This invitation has already been used');
+		}
+		$user = $this->userManager->get($loggedInUid);
+		if ($user === null) {
+			throw new \RuntimeException('Not logged in');
+		}
+		$mine = strtolower((string)$user->getEMailAddress());
+		if ($mine === '' || $mine !== strtolower($member->getInvitationEmail())) {
+			throw new \RuntimeException('This invitation was sent to a different email address than the account you are logged in with.');
+		}
+		$gid = $member->getGid();
+		// If they are already a member under their real uid, just drop the pending row.
+		try { $already = $this->memberMapper->findByGidUid($gid, $loggedInUid); } catch (DoesNotExistException) { $already = null; }
+		if ($already !== null) {
+			$this->memberMapper->deleteByGidUid($gid, $member->getInvitationEmail());
+		} else {
+			$member->setUid($loggedInUid);
+			$member->setInvitationEmail(''); // now a normal member, not an external account
+			$member->setStatus(GroupMember::STATUS_ACCEPTED);
+			$member->setAcceptToken('');
+			$member->setDeclineToken('');
+			$this->memberMapper->update($member);
+			$this->syncService->pushMemberToAllSilos($member);
+		}
+		$this->groupManager->get($gid)?->addUser($user);
+		return $gid;
+	}
+
 	public function declineInvitation(string $declineToken): string {
 		try {
 			$member = $this->memberMapper->findByDeclineToken($declineToken);
