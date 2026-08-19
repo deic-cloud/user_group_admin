@@ -6,6 +6,10 @@
 				<span class="uga-identity__label">{{ t('user_group_admin', 'Group ID') }}:</span>
 				<code class="uga-identity__value" :title="t('user_group_admin', 'Used in WebDAV paths for grant folders')">{{ gid }}</code>
 			</div>
+			<div v-if="groupOwner" class="uga-identity__row">
+				<span class="uga-identity__label">{{ t('user_group_admin', 'Owner') }}:</span>
+				<span class="uga-identity__desc">{{ groupOwner }}</span>
+			</div>
 			<div v-if="groupDescription" class="uga-identity__row">
 				<span class="uga-identity__label">{{ t('user_group_admin', 'Description') }}:</span>
 				<span class="uga-identity__desc">{{ groupDescription }}</span>
@@ -174,6 +178,7 @@ const searchingUsers        = ref(false)
 const inviteError           = ref('')
 const editDescription       = ref('')
 const groupDescription      = ref('')
+const groupOwner            = ref('')
 const editOpen              = ref(false)
 const editPrivate           = ref(false)
 const editStorageGrant      = ref('none')
@@ -213,6 +218,7 @@ async function loadGroup() {
 	const g = data.ocs?.data ?? {}
 	editDescription.value  = g.description ?? ''
 	groupDescription.value = g.description ?? ''
+	groupOwner.value = g.owner ?? ''
 	editOpen.value         = !!g.open
 	editPrivate.value      = !!g.private
 	const grantId = g.storage_grant || 'none'

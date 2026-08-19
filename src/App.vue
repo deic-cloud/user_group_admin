@@ -43,7 +43,7 @@
 					<NcAppNavigationCaption :name="t('user_group_admin', 'Groups you can join')" />
 					<NcAppNavigationItem
 						v-for="g in joinableGroups" :key="'j-' + g.gid"
-						:name="g.gid"
+						:name="g.gid + '  —  ' + g.owner"
 						:title="g.description || g.gid">
 						<template #actions>
 							<NcActionButton @click="join(g.gid)">
