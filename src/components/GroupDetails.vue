@@ -38,9 +38,9 @@
 
 			<h3>{{ t('user_group_admin', 'Members') }}</h3>
 			<ul class="uga-member-list">
-				<li v-for="m in members" :key="m.uid + m.invitation_email" class="uga-member">
+				<li v-for="m in members" :key="m.uid + m.invitation_email" class="uga-member" :class="{ 'uga-member--pending': m.status !== 1 }">
 					<span class="uga-member__uid">{{ memberLabel(m) }}</span>
-					<span class="uga-member__status">{{ statusLabel(m.status) }}</span>
+					<span class="uga-member__status">{{ memberStatus(m) }}</span>
 					<div class="uga-member__actions" v-if="isOwner">
 						<NcButton v-if="m.status === 0" size="small" @click="approve(m.uid)">
 							{{ t('user_group_admin', 'Approve') }}
@@ -232,6 +232,12 @@ const STATUS_LABELS = {
 	  2:  t('user_group_admin', 'Declined'),
 }
 function statusLabel(s) { return STATUS_LABELS[s] ?? String(s) }
+function memberStatus(m) {
+	if (m.uid === 'uga_external' && m.status === -1) {
+		return t('user_group_admin', 'Email invitation sent')
+	}
+	return statusLabel(m.status)
+}
 function memberLabel(m) {
 	if (m.uid === 'uga_external') { return m.invitation_email }
 	return m.display_name && m.display_name !== m.uid ? `${m.display_name} (${m.uid})` : m.uid
@@ -477,6 +483,7 @@ onMounted(() => { loadMembers(); loadGroup() })
 	border-bottom: 1px solid var(--color-border-dark); }
 .uga-member__uid { flex: 1; }
 .uga-member__status { font-size: .85em; color: var(--color-text-maxcontrast); }
+.uga-member--pending .uga-member__uid { font-style: italic; color: var(--color-text-maxcontrast); }
 .uga-member__actions { display: flex; gap: 4px; }
 .uga-add-member { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 .uga-add-member :deep(button) { flex-shrink: 0; }
