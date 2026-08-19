@@ -9,11 +9,11 @@ Let users create and manage their own Nextcloud groups, with optional storage gr
 
 `user_group_admin` extends Nextcloud's group system so ordinary users can:
 
-- Create groups and invite members (invite/accept workflow)
+- Create groups and invite members — existing Nextcloud users by username, or **external partners by email** (the platform's most-used collaboration feature; see [External collaborators](#external-collaborators-email-invitations))
 - Allow open-join groups (no invite required)
 - Keep private groups (hidden from non-members)
 - Allocate a **storage grant** from their own quota to the group — usage consumed by the grant is billed to the group owner, not the members
-- Cross-silo sync: group membership changes are propagated to all registered silos via the `files_sharding` internal API
+- Cross-silo sync: group and membership changes are propagated to all registered silos by the app's own `GroupSyncService` (authenticated with the `files_sharding` shared secret)
 
 In a ScienceData sharded deployment the master holds the authoritative group registry; silo nodes mirror it so that group membership is available locally for DAV and sharing operations.
 
@@ -31,14 +31,25 @@ occ app:enable user_group_admin
 ```
 
 Migrations run automatically and create two tables:
-- `user_group_admin_groups` — group metadata (name, owner, type, storage grant)
-- `user_group_admin_members` — member roster with invitation state
+- `uga_groups` — group metadata (owner, description, visibility, storage grant + committed pool, pending owner)
+- `uga_group_members` — member roster: per-member status, plus pending email-invitation data
 
 ## Features
 
-### Invite workflow
+### Members and invitations
 
-Group owners invite users by username. Invited users see a pending invitation in their interface and can accept or decline. Accepted memberships are immediately synced to all silos.
+Group owners add **existing Nextcloud users** by username. The invitee sees a pending invitation and can accept or decline; accepted memberships sync immediately to all silos. The member list shows each member's **full name and username** — resolved across silos via the master directory — so an owner is never in doubt about who they admit or remove.
+
+### External collaborators (email invitations)
+
+Seamless collaboration with people outside the platform is ScienceData's most-used and most-defining feature. A group owner can invite **anyone by email address** — whether or not they already have an account here.
+
+- **Invite.** In the group's *Add member* box the owner types an email and clicks *Invite via email*. A pending membership is created with **`uid` = the email address** — so a group can hold any number of pending email invitations at once — and an email with accept / decline links is sent. Pending invitations appear in the member list marked *"Email invitation sent"*, and the owner can cancel any single one.
+- **Accept — two paths, chosen automatically by whether the email already belongs to an account:**
+  - *Already has an account here* → the accept link shows **"Log in to accept"**. After logging in (the account's email must match the invitation), the pending `uid=email` membership is **swapped to the person's real uid** — no second account is created.
+  - *New person* → the accept link shows a **"Create your account"** form; a lightweight external account is created with `uid` = the email address, assigned to the inviting owner's silo, and added to the group.
+- **Quota.** An external account gets Nextcloud's default quota. It is deliberately **not** a member of any institutional domain group (e.g. `dtu.dk`), so it receives none of that institution's home top-up or grant folder — only what the group it joined provides. Its footprint is thus scoped to the collaboration.
+- **Responsibility and lifecycle.** The owner of the inviting group vouches for the external collaborator and is responsible for verifying their identity and their actions. The account is therefore bound to its **creating group** (recorded at signup): when the collaborator is removed from that group, the external account is **disabled** — regardless of any other groups they may have joined in the meantime.
 
 ### Open-join groups
 
@@ -79,36 +90,42 @@ Because grant folders are stored per-member, a transfer moves **no data** — it
 
 ### Cross-silo sync
 
-When a group is created, updated, or deleted on the master, `files_sharding` propagates the change to all registered silos via `POST /internal/users/{userId}/update` and related endpoints. Silos store a local mirror so group membership is available without a round-trip to the master.
+When a group or membership changes, the app's `GroupSyncService` propagates it to every registered silo (and the master) — authenticated with the `files_sharding` shared secret — via the app's own internal endpoints (`/internal/groups/{gid}/members/sync`, `/internal/groups/{gid}/members/{uid}/delete`, and group upsert/delete). Each node keeps a local mirror so membership is available for DAV and sharing without a round-trip to the master.
 
 ## Architecture
 
 ### Custom group backend
 
-`user_group_admin` registers a custom `IGroupBackend` with Nextcloud. Groups whose names match the app's prefix are resolved through this backend rather than the default database backend. The backend reads from `user_group_admin_groups` and `user_group_admin_members`.
+`user_group_admin` registers a custom group backend (`OCA\UserGroupAdmin\Group\GroupBackend`). Every group this app manages is resolved through it — membership comes from `uga_group_members` (only `status = accepted` rows count) — and Nextcloud aggregates these with any other group backends. The app also mirrors accepted memberships into core NC groups so ordinary group shares work. One consequence: because this backend already reports a user as in-group, core's `UserAddedEvent` / `UserRemovedEvent` do **not** fire for these groups, so membership changes are signalled by the app's own `GroupMembersChangedEvent`.
 
 ### DB schema
 
-**`user_group_admin_groups`**
+**`uga_groups`** (primary key `gid`)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `gid` | varchar | Group identifier |
+| `owner` | varchar | User ID of the owner (or the `uga_hidden_owner` sentinel) |
+| `description` | varchar | Free-text description, shown as the group's friendly name |
+| `private` | bool | Hidden from non-members in search / listings |
+| `open` | bool | Open-join: anyone may join without an invitation |
+| `hidden` | bool | Hidden system group (e.g. per-domain billing groups) |
+| `storage_grant` | varchar | Per-member grant size (e.g. `10 GB`; empty = none) |
+| `storage_grant_total` | varchar | Committed-pool cap for the whole group (empty = no pool cap) |
+| `grant_sync_hide` | bool | Hide the grant folder from desktop sync clients |
+| `pending_owner` | varchar | Proposed new owner awaiting consent during a transfer (empty = none) |
+
+**`uga_group_members`** (unique on `(gid, uid)`)
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | int (PK) | Auto-increment |
 | `gid` | varchar | Group identifier |
-| `owner` | varchar | User ID of group owner |
-| `type` | varchar | `invite` / `open` / `private` |
-| `storage_grant` | bigint | Per-member grant size in bytes (0 = none) |
-| `storage_grant_total` | varchar | Committed-pool cap for the whole group (hard write-stop; empty = no pool cap) |
-| `pending_owner` | varchar | Proposed new owner awaiting consent during an ownership transfer (empty = none) |
-
-**`user_group_admin_members`**
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | int (PK) | Auto-increment |
-| `gid` | varchar | Group identifier |
-| `uid` | varchar | Member user ID |
-| `state` | varchar | `invited` / `member` |
+| `uid` | varchar | Member user ID. For a pending **email** invitation this is the invited email (distinct per invite), swapped to the real uid if the invitee logs in |
+| `status` | smallint | `-1` pending · `0` join-requested · `1` accepted · `2` declined |
+| `accept_token` / `decline_token` | varchar | One-time tokens for the email accept / decline links |
+| `invitation_email` | varchar | The email for external invitations; empty for ordinary members — the "is external" marker |
+| `storage_used` | bigint | Last recorded grant-folder usage (refreshed by the `GrantFolderUsage` job) |
 
 ### Sharding adapter
 
@@ -120,17 +137,23 @@ All endpoints under `/ocs/v2.php/apps/user_group_admin/api/v1/`. Authentication 
 
 | Method | URL | Description |
 |--------|-----|-------------|
-| `GET` | `/groups` | List groups (owner or member) |
-| `POST` | `/groups` | Create group |
-| `DELETE` | `/groups/{gid}` | Delete group (owner only) |
-| `GET` | `/groups/{gid}/members` | List members |
-| `POST` | `/groups/{gid}/members` | Invite or add member |
-| `DELETE` | `/groups/{gid}/members/{uid}` | Remove member |
-| `POST` | `/groups/{gid}/accept` | Accept invitation |
-| `PUT` | `/groups/{gid}` | Update group settings (type, storage grant) |
-| `PUT` | `/groups/{gid}/owner` | Offer ownership (`uid`); admin/domain owner may `force=1` (no consent) |
+| `GET` | `/groups` | List the caller's groups (owned or member) |
+| `GET` | `/groups/search?q=` | Search joinable (open) groups |
+| `GET` | `/invitations` | The caller's pending invitations |
+| `POST` | `/groups` | Create a group |
+| `GET` | `/groups/{gid}` | Group details |
+| `PUT` | `/groups/{gid}` | Update settings (description, visibility, storage grant, sync-hide) |
+| `DELETE` | `/groups/{gid}` | Delete a group (owner only) |
+| `GET` | `/groups/{gid}/members` | List members (with resolved display names) |
+| `POST` | `/groups/{gid}/members` | Invite/add an existing user, or request to join |
+| `POST` | `/groups/{gid}/members/external` | Invite an external collaborator by email |
+| `PUT` | `/groups/{gid}/members/{uid}` | Accept an invitation / approve a join request |
+| `DELETE` | `/groups/{gid}/members/{uid}` | Remove a member or cancel an email invitation |
+| `PUT` | `/groups/{gid}/owner` | Offer ownership (`uid`); admin/domain owner may `force=1` |
 | `PUT` | `/groups/{gid}/owner/pending` | Accept a pending ownership offer |
 | `DELETE` | `/groups/{gid}/owner/pending` | Decline a pending ownership offer |
+
+**External-signup pages** (public, not OCS): `GET /signup?token=` renders the create-account form, or *"log in to accept"* when the email already has an account; `GET /signup/accept?token=` (session-authed) completes acceptance for a logged-in existing user; `GET /signup/decline?token=` declines.
 
 ## Build
 
