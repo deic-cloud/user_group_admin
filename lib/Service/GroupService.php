@@ -95,7 +95,35 @@ class GroupService {
 	 * groups are never billed.
 	 */
 	public function ensureDomainGroupMembership(string $gid, string $uid): void {
-		$this->createHiddenGroup($gid); // idempotent (returns existing)
+		// #1 External collaborator accounts are NOT institution-grouped. Their uid is an
+		// email, so the "domain" is merely the mail provider (e.g. gmail.com), not an
+		// institution — domain grouping is for SAML/institutional logins only, as on the
+		// old service. Detected via the synced member row's invitation_email (which is
+		// node-independent, unlike the 'external_group' user-value that only exists on the
+		// node where signup ran).
+		foreach ($this->memberMapper->findByUid($uid, false) as $m) {
+			if ($m->getInvitationEmail() !== '') {
+				return;
+			}
+		}
+
+		// #2 Only adopt a group as the institution's domain group if it is a genuine
+		// hidden domain group. If a real user has already created a group of this exact
+		// name, do NOT populate it with institutional members — that would let a
+		// name-squatter own an institution's group and see/control its roster and grants.
+		// Leave it untouched for an admin to resolve.
+		if ($this->groupMapper->existsByGid($gid)) {
+			$existing = $this->groupMapper->findByGid($gid);
+			if (!$existing->getHidden()) {
+				$this->logger->warning(
+					"user_group_admin: domain '{$gid}' collides with a user-created group owned by "
+					. "'{$existing->getOwner()}'; not domain-grouping '{$uid}' (needs admin resolution)"
+				);
+				return;
+			}
+		}
+
+		$this->createHiddenGroup($gid); // idempotent (returns existing hidden group)
 		if (!$this->memberMapper->isMember($gid, $uid)) {
 			$this->addMember($gid, $uid, GroupMember::STATUS_ACCEPTED);
 			$this->syncService->pushGroupToAllSilos(
