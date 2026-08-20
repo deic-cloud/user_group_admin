@@ -8,10 +8,11 @@ return [
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
 
 		// External collaborator signup (public, no session)
-		['name' => 'signup#showForm',   'url' => '/signup',         'verb' => 'GET'],
-		['name' => 'signup#submitForm', 'url' => '/signup',         'verb' => 'POST'],
-		['name' => 'signup#decline',    'url' => '/signup/decline', 'verb' => 'GET'],
-		['name' => 'signup#acceptAsUser', 'url' => '/signup/accept',  'verb' => 'GET'],
+		['name' => 'signup#showForm',       'url' => '/signup',         'verb' => 'GET'],
+		['name' => 'signup#showSignupForm', 'url' => '/signup/create',  'verb' => 'GET'],
+		['name' => 'signup#submitForm',     'url' => '/signup/create',  'verb' => 'POST'],
+		['name' => 'signup#decline',        'url' => '/signup/decline', 'verb' => 'GET'],
+		['name' => 'signup#acceptAsUser',   'url' => '/signup/accept',  'verb' => 'GET'],
 
 		// Internal silo-sync endpoints (shared secret, no NC session)
 		['name' => 'internal#syncGroup',    'url' => '/internal/groups/sync',                              'verb' => 'POST'],
@@ -19,6 +20,7 @@ return [
 		['name' => 'internal#syncMember',   'url' => '/internal/groups/{gid}/members/sync',               'verb' => 'POST'],
 		['name' => 'internal#deleteMember', 'url' => '/internal/groups/{gid}/members/{uid}/delete',       'verb' => 'POST'],
 		['name' => 'internal#searchUsers',  'url' => '/internal/users/search',                            'verb' => 'GET'],
+		['name' => 'internal#notifyExternalSignup', 'url' => '/internal/notify/external-signup',          'verb' => 'POST'],
 	],
 	'ocs' => [
 		// Users

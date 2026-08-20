@@ -67,6 +67,17 @@ class GroupSyncService {
 		}
 	}
 
+	/**
+	 * Tell all peers that an external collaborator signed up, so the node where the
+	 * group owner is local can raise the owner's "verify this collaborator" notification.
+	 */
+	public function broadcastExternalSignupNotification(string $gid, string $owner, string $email, string $name, string $address, string $affiliation): void {
+		$payload = ['gid' => $gid, 'owner' => $owner, 'email' => $email, 'name' => $name, 'address' => $address, 'affiliation' => $affiliation];
+		foreach ($this->syncTargets() as $url) {
+			$this->post($url, 'internal/notify/external-signup', $payload);
+		}
+	}
+
 	/** Tell all peers to remove a member from a group. */
 	public function removeMemberOnAllSilos(string $gid, string $uid, string $email = ''): void {
 		$path = 'internal/groups/' . urlencode($gid) . '/members/' . urlencode($uid) . '/delete';

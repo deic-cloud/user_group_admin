@@ -516,16 +516,11 @@ class GroupService {
 		}
 
 		$owner = $group->getOwner();
-		if ($email !== '' && $targetUid === GroupMember::EXTERNAL_UID) {
-			// Cancel one specific pending email invitation (all share EXTERNAL_UID).
-			$this->memberMapper->deleteByGidEmail($gid, $email);
-			$this->syncService->removeMemberOnAllSilos($gid, $targetUid, $email);
-			$this->membersChanged($gid);
-			$this->publishActivity('member_removed', ['gid' => $gid, 'uid' => $email], $callerUid, $callerUid);
-			return;
-		}
-		// An external (email-invited) collaborator exists only for its group(s): note it
-		// so we can disable the account once it leaves its last group.
+		// A pending email invite and an accepted external collaborator both have
+		// uid = the email address, so the general path below handles both: it deletes
+		// the row (pending invite → nothing else to do, no account exists) and, for an
+		// accepted collaborator, disables the account when they leave the creating group.
+		//
 		// External collaborators are tied to the group that created them: that group's
 		// owner vouched for (and is legally responsible for) the person, so removal from
 		// the CREATING group disables the account — regardless of other memberships.

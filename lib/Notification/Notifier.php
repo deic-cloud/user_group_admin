@@ -81,6 +81,26 @@ class Notifier implements INotifier {
 			return $notification;
 		}
 
+		if ($notification->getSubject() === 'external_signup') {
+			$p           = $notification->getSubjectParameters();
+			$gid         = $p['gid'] ?? '';
+			$email       = $p['email'] ?? '';
+			$name        = $p['name'] ?? $email;
+			$affiliation = $p['affiliation'] ?? '';
+			$address     = $p['address'] ?? '';
+
+			$notification->setParsedSubject($l->t('%1$s signed up as an external collaborator in group "%2$s"', [$name, $gid]));
+
+			$details = [];
+			if ($email !== '')       { $details[] = $l->t('Email: %s', [$email]); }
+			if ($affiliation !== '') { $details[] = $l->t('Affiliation: %s', [$affiliation]); }
+			if ($address !== '')     { $details[] = $l->t('Address: %s', [$address]); }
+			$details[] = $l->t('Please verify their details. Remove them from the group if this is a mistake.');
+			$notification->setParsedMessage(implode("\n", $details));
+
+			return $notification;
+		}
+
 		if ($notification->getSubject() === 'ownership_transfer') {
 			$p   = $notification->getSubjectParameters();
 			$gid = $p['gid'];

@@ -29,7 +29,13 @@ class SignupController extends Controller {
 		parent::__construct($appName, $request);
 	}
 
-	/** Render the signup form for an accept token. */
+	/**
+	 * Landing page for an accept link: greet the invitee and offer two paths —
+	 * "Log in" (existing account, incl. WAYF/eduGAIN auto-created) or
+	 * "Sign up as external collaborator". Never funnels anyone straight into
+	 * account creation, so people who can log in federated don't end up with
+	 * a second account.
+	 */
 	#[PublicPage]
 	#[NoCSRFRequired]
 	public function showForm(string $token = ''): TemplateResponse {
@@ -37,10 +43,29 @@ class SignupController extends Controller {
 		if ($info === null) {
 			return new TemplateResponse('user_group_admin', 'signup_invalid', [], 'guest');
 		}
-		if ($info['existingUser']) {
-			return $this->loginToAccept($token, $info);
+		return new TemplateResponse('user_group_admin', 'signup_choice', [
+			'gid'       => $info['gid'],
+			'owner'     => $info['owner'] ?? '',
+			'email'     => $info['email'],
+			'acceptUrl' => $this->urlGenerator->linkToRouteAbsolute('user_group_admin.signup.acceptAsUser', ['token' => $token]),
+			'createUrl' => $this->urlGenerator->linkToRouteAbsolute('user_group_admin.signup.showSignupForm', ['token' => $token]),
+		], 'guest');
+	}
+
+	/** Render the external-collaborator signup form (the "Sign up" path). */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function showSignupForm(string $token = ''): TemplateResponse {
+		$info = $token !== '' ? $this->invitationService->describeInvite($token) : null;
+		if ($info === null) {
+			return new TemplateResponse('user_group_admin', 'signup_invalid', [], 'guest');
 		}
-		return new TemplateResponse('user_group_admin', 'signup', ['token' => $token], 'guest');
+		return new TemplateResponse('user_group_admin', 'signup', [
+			'token' => $token,
+			'email' => $info['email'],
+			'gid'   => $info['gid'],
+			'owner' => $info['owner'] ?? '',
+		], 'guest');
 	}
 
 	/** Render the 'log in to accept' page for an invite whose email is an existing user. */
@@ -79,21 +104,30 @@ class SignupController extends Controller {
 		}
 	}
 
-	/** Process the submitted signup form. */
+	/** Process the submitted external-collaborator signup form. */
 	#[PublicPage]
 	public function submitForm(
 		string $token       = '',
 		string $password    = '',
 		string $displayName = '',
+		string $address     = '',
+		string $affiliation = '',
 	): TemplateResponse|RedirectResponse {
 		try {
-			$this->invitationService->completeSignup($token, $password, $displayName);
+			$this->invitationService->completeSignup($token, $password, $displayName, $address, $affiliation);
 			return new TemplateResponse('user_group_admin', 'signup_success', [], 'guest');
 		} catch (\RuntimeException $e) {
+			$info = $this->invitationService->describeInvite($token);
 			return new TemplateResponse(
 				'user_group_admin',
 				'signup',
-				['token' => $token, 'error' => $e->getMessage()],
+				[
+					'token' => $token,
+					'email' => $info['email'] ?? '',
+					'gid'   => $info['gid'] ?? '',
+					'owner' => $info['owner'] ?? '',
+					'error' => $e->getMessage(),
+				],
 				'guest',
 			);
 		}

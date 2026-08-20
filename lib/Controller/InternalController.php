@@ -199,6 +199,30 @@ class InternalController extends Controller {
 		return new JSONResponse(['success' => true]);
 	}
 
+	/**
+	 * Raise the group owner's "verify this external collaborator" notification, but
+	 * only on the node where the owner is local (notifications are per-instance).
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function notifyExternalSignup(
+		string $gid = '', string $owner = '', string $email = '',
+		string $name = '', string $address = '', string $affiliation = '',
+	): JSONResponse {
+		if ($err = $this->checkSecret()) return $err;
+		if ($owner === '' || $this->userManager->get($owner) === null) {
+			return new JSONResponse(['success' => true, 'skipped' => true]); // owner not on this node
+		}
+		$n = $this->notificationManager->createNotification();
+		$n->setApp('user_group_admin')
+			->setUser($owner)
+			->setDateTime(new \DateTime())
+			->setObject('external_signup', $gid . '/' . $email)
+			->setSubject('external_signup', ['gid' => $gid, 'name' => $name, 'email' => $email, 'address' => $address, 'affiliation' => $affiliation]);
+		$this->notificationManager->notify($n);
+		return new JSONResponse(['success' => true]);
+	}
+
 	// ── Helpers ───────────────────────────────────────────────────────────────
 
 	private function upsertGroup(array $data): void {

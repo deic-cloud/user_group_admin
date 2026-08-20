@@ -9,33 +9,38 @@ use OCA\UserGroupAdmin\Db\Group;
 use OCA\UserGroupAdmin\Db\GroupMapper;
 use OCA\UserGroupAdmin\Db\GroupMember;
 use OCA\UserGroupAdmin\Db\GroupMemberMapper;
+use OCP\Accounts\IAccountManager;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IConfig;
 use OCP\IGroupManager;
 use OCP\IL10N;
 use OCP\IURLGenerator;
+use OCP\IUser;
 use OCP\IUserManager;
 use OCP\Mail\IMailer;
+use OCP\Notification\IManager as INotificationManager;
 use Psr\Log\LoggerInterface;
 
 class InvitationService {
 	public function __construct(
-		private GroupMapper       $groupMapper,
-		private GroupMemberMapper $memberMapper,
-		private IUserManager      $userManager,
-		private IGroupManager     $groupManager,
-		private IShardingAdapter  $shardingService,
-		private GroupSyncService  $syncService,
-		private IMailer           $mailer,
-		private IURLGenerator     $urlGenerator,
-		private IConfig           $config,
-		private IL10N             $l,
-		private LoggerInterface   $logger,
+		private GroupMapper          $groupMapper,
+		private GroupMemberMapper    $memberMapper,
+		private IUserManager         $userManager,
+		private IGroupManager        $groupManager,
+		private IShardingAdapter     $shardingService,
+		private GroupSyncService     $syncService,
+		private IMailer              $mailer,
+		private IURLGenerator        $urlGenerator,
+		private IConfig              $config,
+		private IAccountManager      $accountManager,
+		private INotificationManager $notificationManager,
+		private IL10N                $l,
+		private LoggerInterface      $logger,
 	) {}
 
 	/**
 	 * Invite an external email address to a group.
-	 * Creates a pending GroupMember with EXTERNAL_UID and sends an email with accept/decline links.
+	 * Creates a pending GroupMember (uid = the email) and sends an email with accept/decline links.
 	 *
 	 * @throws \RuntimeException on validation failure
 	 */
@@ -87,6 +92,8 @@ class InvitationService {
 		string $acceptToken,
 		string $password,
 		string $displayName,
+		string $address = '',
+		string $affiliation = '',
 	): string {
 		try {
 			$member = $this->memberMapper->findByAcceptToken($acceptToken);
@@ -108,10 +115,16 @@ class InvitationService {
 			throw new \RuntimeException('Password must be at least 10 characters');
 		}
 
-		// Use email as username (canonical identity: email@master-host).
+		// Never create a second account for an email that already has one — the
+		// invitee should use "Log in" instead (incl. WAYF/eduGAIN auto-created).
 		$uid = $email;
 		if ($this->userManager->userExists($uid)) {
-			throw new \RuntimeException('An account with this email already exists');
+			throw new \RuntimeException('An account already uses this email address — please go back and choose "Log in" instead.');
+		}
+		foreach ($this->userManager->getByEmail($email) as $u) {
+			if ($u->isEnabled()) {
+				throw new \RuntimeException('An account already uses this email address — please go back and choose "Log in" instead.');
+			}
 		}
 
 		// Create user.
@@ -123,6 +136,7 @@ class InvitationService {
 		if ($displayName !== '') {
 			$user->setDisplayName($displayName);
 		}
+		$this->storeContactDetails($user, $address, $affiliation);
 
 		// Assign new user to owner's silo.
 		$gid   = $member->getGid();
@@ -133,7 +147,7 @@ class InvitationService {
 			$this->shardingService->setUserServer($uid, $ownerServer->getId());
 		}
 
-		// Mark membership accepted and replace EXTERNAL_UID with real uid.
+		// Mark membership accepted (uid is already the email).
 		$member->setUid($uid);
 		$member->setStatus(GroupMember::STATUS_ACCEPTED);
 		$member->setAcceptToken('');
@@ -151,16 +165,57 @@ class InvitationService {
 		// Record the creating group so removal from it disables this external account.
 		$this->config->setUserValue($uid, 'user_group_admin', 'external_group', $gid);
 
+		// Notify the group owner so they can verify the collaborator (or remove them).
+		$this->notifyOwnerOfSignup($gid, $owner, $email, $displayName !== '' ? $displayName : $email, $address, $affiliation);
+
 		return $uid;
+	}
+
+	/** Persist the collaborator's postal address / affiliation on their account (best effort). */
+	private function storeContactDetails(IUser $user, string $address, string $affiliation): void {
+		if ($address === '' && $affiliation === '') {
+			return;
+		}
+		try {
+			$account = $this->accountManager->getAccount($user);
+			if ($address !== '') {
+				$account->getProperty(IAccountManager::PROPERTY_ADDRESS)->setValue($address);
+			}
+			if ($affiliation !== '') {
+				$account->getProperty(IAccountManager::PROPERTY_ORGANISATION)->setValue($affiliation);
+			}
+			$this->accountManager->updateAccount($account);
+		} catch (\Throwable $e) {
+			$this->logger->warning('user_group_admin: failed to store collaborator contact details: ' . $e->getMessage());
+		}
+	}
+
+	/**
+	 * Notify the group owner that an external collaborator signed up. The owner may
+	 * live on another node, and NC notifications are per-instance — so create it
+	 * locally if the owner is here, and broadcast to peers (each creates it only if
+	 * the owner is local there).
+	 */
+	private function notifyOwnerOfSignup(string $gid, string $owner, string $email, string $name, string $address, string $affiliation): void {
+		if ($owner !== '' && $this->userManager->get($owner) !== null) {
+			$n = $this->notificationManager->createNotification();
+			$n->setApp('user_group_admin')
+				->setUser($owner)
+				->setDateTime(new \DateTime())
+				->setObject('external_signup', $gid . '/' . $email)
+				->setSubject('external_signup', ['gid' => $gid, 'name' => $name, 'email' => $email, 'address' => $address, 'affiliation' => $affiliation]);
+			$this->notificationManager->notify($n);
+		}
+		$this->syncService->broadcastExternalSignupNotification($gid, $owner, $email, $name, $address, $affiliation);
 	}
 
 	/**
 	 * Process a decline token — mark invitation as declined.
 	 */
 	/**
-	 * Describe a pending email invite for the accept page: email, group, and whether
-	 * the address already belongs to an enabled account (→ log-in-to-accept path).
-	 * @return array{email:string,gid:string,existingUser:bool}|null
+	 * Describe a pending email invite for the accept page: email, group, group-owner
+	 * display name, and whether the address already belongs to an enabled account.
+	 * @return array{email:string,gid:string,owner:string,existingUser:bool}|null
 	 */
 	public function describeInvite(string $acceptToken): ?array {
 		try {
@@ -172,11 +227,16 @@ class InvitationService {
 			return null;
 		}
 		$email = $member->getInvitationEmail();
+		$gid   = $member->getGid();
+		$owner = '';
+		try {
+			$owner = $this->syncService->resolveDisplayName($this->groupMapper->findByGid($gid)->getOwner());
+		} catch (\Throwable) {}
 		$existing = false;
 		foreach ($this->userManager->getByEmail($email) as $u) {
 			if ($u->isEnabled()) { $existing = true; break; }
 		}
-		return ['email' => $email, 'gid' => $member->getGid(), 'existingUser' => $existing];
+		return ['email' => $email, 'gid' => $gid, 'owner' => $owner, 'existingUser' => $existing];
 	}
 
 	/**
