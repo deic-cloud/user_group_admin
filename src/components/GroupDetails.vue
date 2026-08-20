@@ -53,7 +53,7 @@
 						<NcButton v-if="m.status === 0" size="small" @click="approve(m.uid)">
 							{{ t('user_group_admin', 'Approve') }}
 						</NcButton>
-						<NcButton size="small" variant="error" @click="remove(m.uid, m.invitation_email)">
+						<NcButton size="small" variant="error" @click="remove(m)">
 							{{ t('user_group_admin', 'Remove') }}
 						</NcButton>
 					</div>
@@ -378,10 +378,29 @@ async function approve(uid) {
 	loadMembers()
 }
 
-async function remove(uid, email = '') {
-	await axios.delete(`${OCS}/groups/${encodeURIComponent(props.gid)}/members/${encodeURIComponent(uid)}`,
-		{ params: email ? { email } : {}, headers: { 'OCS-APIREQUEST': 'true' } })
-	loadMembers()
+async function remove(m) {
+	const uid   = m.uid
+	const email = m.invitation_email || ''
+	const name  = memberLabel(m)
+	// An accepted external collaborator's row (invitation_email set + accepted) is their
+	// creating-group membership — removing it here deactivates their whole account.
+	const deactivates = !!m.invitation_email && Number(m.status) === 1
+	const message = deactivates
+		? t('user_group_admin', 'Remove {name} from “{gid}”?\n\nThis is an external collaborator whose account exists only because of this group. Removing them here will DEACTIVATE their account — they lose access immediately.', { name, gid: props.gid })
+		: t('user_group_admin', 'Remove {name} from “{gid}”?', { name, gid: props.gid })
+	if (!await askConfirm({
+		title: t('user_group_admin', 'Remove member'),
+		message,
+		confirmLabel: deactivates ? t('user_group_admin', 'Remove and deactivate') : t('user_group_admin', 'Remove'),
+		variant: 'error',
+	})) return
+	try {
+		await axios.delete(`${OCS}/groups/${encodeURIComponent(props.gid)}/members/${encodeURIComponent(uid)}`,
+			{ params: email ? { email } : {}, headers: { 'OCS-APIREQUEST': 'true' } })
+		loadMembers()
+	} catch (e) {
+		showError(e.response?.data?.ocs?.meta?.message ?? t('user_group_admin', 'Failed to remove member'))
+	}
 }
 
 async function leaveGroup() {
@@ -545,5 +564,5 @@ onMounted(() => { loadMembers(); loadGroup() })
 .uga-invite-banner p { margin: 0 0 8px; }
 .uga-invite-banner__actions { display: flex; gap: 8px; }
 h3 { font-size: 1em; font-weight: 600; margin: 20px 0 8px; }
-.uga-confirm { margin: 4px 0 8px; }
+.uga-confirm { white-space: pre-line; margin: 4px 0 8px; }
 </style>

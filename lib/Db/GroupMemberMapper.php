@@ -115,6 +115,20 @@ class GroupMemberMapper extends QBMapper {
 		$qb->executeStatement();
 	}
 
+	/**
+	 * @return GroupMember[] accepted external-collaborator memberships (invitation_email
+	 * set) — i.e. each external account's creating-group row. The group's owner is the
+	 * party legally responsible for that collaborator.
+	 */
+	public function findExternalAccounts(): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from($this->getTableName())
+		   ->where($qb->expr()->neq('invitation_email', $qb->createNamedParameter('')))
+		   ->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(GroupMember::STATUS_ACCEPTED, IQueryBuilder::PARAM_INT)))
+		   ->orderBy('gid');
+		return $this->findEntities($qb);
+	}
+
 	/** @return GroupMember[] all members across all groups (for silo sync) */
 	public function findAll(): array {
 		$qb = $this->db->getQueryBuilder();
