@@ -568,9 +568,14 @@ class GroupService {
 	public function listGroupsForUser(string $uid): array {
 		$owned   = $this->groupMapper->findByOwner($uid);
 		$member  = $this->groupMapper->findByMember($uid);
-		// Merge, dedup by gid.
+		// Merge, dedup by gid. Skip hidden groups: domain/institution groups
+		// (e.g. dtu.dk, gmail.com) that users are auto-joined to must not clutter
+		// their "My groups" list — same as SAML-provisioned domain groups.
 		$all = [];
 		foreach (array_merge($owned, $member) as $g) {
+			if ($g->getHidden()) {
+				continue;
+			}
 			$all[$g->getGid()] = $g;
 		}
 		return array_values($all);

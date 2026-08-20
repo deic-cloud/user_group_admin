@@ -244,11 +244,11 @@ class InternalController extends Controller {
 			$account = $this->accountManager->getAccount($user);
 			if ($address !== '') {
 				$account->getProperty(IAccountManager::PROPERTY_ADDRESS)
-					->setValue($address)->setScope(IAccountManager::SCOPE_LOCAL);
+					->setValue($address)->setScope(IAccountManager::SCOPE_FEDERATED);
 			}
 			if ($affiliation !== '') {
 				$account->getProperty(IAccountManager::PROPERTY_ORGANISATION)
-					->setValue($affiliation)->setScope(IAccountManager::SCOPE_LOCAL);
+					->setValue($affiliation)->setScope(IAccountManager::SCOPE_FEDERATED);
 			}
 			$this->accountManager->updateAccount($account);
 		} catch (\Throwable $e) {
