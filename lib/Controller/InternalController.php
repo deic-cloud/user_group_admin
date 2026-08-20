@@ -10,6 +10,7 @@ use OCA\UserGroupAdmin\Db\GroupMapper;
 use OCA\UserGroupAdmin\Db\GroupMember;
 use OCA\UserGroupAdmin\Db\GroupMemberMapper;
 use OCA\UserGroupAdmin\Service\GroupSyncService;
+use OCP\Accounts\IAccountManager;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
@@ -17,6 +18,7 @@ use OCP\AppFramework\Http\JSONResponse;
 use OCP\IConfig;
 use OCP\IGroupManager;
 use OCP\IRequest;
+use OCP\IUser;
 use OCP\IUserManager;
 use OCP\Notification\IManager as INotificationManager;
 
@@ -36,6 +38,7 @@ class InternalController extends Controller {
 		private GroupSyncService  $syncService,
 		private IShardingAdapter  $shardingService,
 		private INotificationManager $notificationManager,
+		private IAccountManager   $accountManager,
 		private IConfig           $config,
 		private \OCP\EventDispatcher\IEventDispatcher $eventDispatcher,
 	) {
@@ -200,8 +203,12 @@ class InternalController extends Controller {
 	}
 
 	/**
-	 * Raise the group owner's "verify this external collaborator" notification, but
-	 * only on the node where the owner is local (notifications are per-instance).
+	 * Landed after an external collaborator signed up (broadcast to every node). On
+	 * the node where the OWNER is local, raise their "verify this collaborator"
+	 * notification; on the node where the new USER is local (the owner's silo — signup
+	 * itself runs on master, so the account's real home is elsewhere), persist the
+	 * collaborator's contact details on their account. Both are per-instance, hence
+	 * the fan-out.
 	 */
 	#[PublicPage]
 	#[NoCSRFRequired]
@@ -210,17 +217,43 @@ class InternalController extends Controller {
 		string $name = '', string $address = '', string $affiliation = '',
 	): JSONResponse {
 		if ($err = $this->checkSecret()) return $err;
-		if ($owner === '' || $this->userManager->get($owner) === null) {
-			return new JSONResponse(['success' => true, 'skipped' => true]); // owner not on this node
+
+		$user = $email !== '' ? $this->userManager->get($email) : null;
+		if ($user !== null) {
+			$this->storeContactDetails($user, $address, $affiliation);
 		}
-		$n = $this->notificationManager->createNotification();
-		$n->setApp('user_group_admin')
-			->setUser($owner)
-			->setDateTime(new \DateTime())
-			->setObject('external_signup', $gid . '/' . $email)
-			->setSubject('external_signup', ['gid' => $gid, 'name' => $name, 'email' => $email, 'address' => $address, 'affiliation' => $affiliation]);
-		$this->notificationManager->notify($n);
+
+		if ($owner !== '' && $this->userManager->get($owner) !== null) {
+			$n = $this->notificationManager->createNotification();
+			$n->setApp('user_group_admin')
+				->setUser($owner)
+				->setDateTime(new \DateTime())
+				->setObject('external_signup', $gid . '/' . $email)
+				->setSubject('external_signup', ['gid' => $gid, 'name' => $name, 'email' => $email, 'address' => $address, 'affiliation' => $affiliation]);
+			$this->notificationManager->notify($n);
+		}
 		return new JSONResponse(['success' => true]);
+	}
+
+	/** Persist address (shown as "Location") + affiliation (Organisation) on the account. */
+	private function storeContactDetails(IUser $user, string $address, string $affiliation): void {
+		if ($address === '' && $affiliation === '') {
+			return;
+		}
+		try {
+			$account = $this->accountManager->getAccount($user);
+			if ($address !== '') {
+				$account->getProperty(IAccountManager::PROPERTY_ADDRESS)
+					->setValue($address)->setScope(IAccountManager::SCOPE_LOCAL);
+			}
+			if ($affiliation !== '') {
+				$account->getProperty(IAccountManager::PROPERTY_ORGANISATION)
+					->setValue($affiliation)->setScope(IAccountManager::SCOPE_LOCAL);
+			}
+			$this->accountManager->updateAccount($account);
+		} catch (\Throwable $e) {
+			// best effort — contact details are also carried in the owner notification
+		}
 	}
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
