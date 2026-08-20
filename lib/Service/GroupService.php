@@ -516,15 +516,23 @@ class GroupService {
 		}
 
 		$owner = $group->getOwner();
-		// A pending email invite and an accepted external collaborator both have
-		// uid = the email address, so the general path below handles both: it deletes
-		// the row (pending invite → nothing else to do, no account exists) and, for an
-		// accepted collaborator, disables the account when they leave the creating group.
-		//
 		// External collaborators are tied to the group that created them: that group's
 		// owner vouched for (and is legally responsible for) the person, so removal from
 		// the CREATING group disables the account — regardless of other memberships.
-		$isCreatingGroup = $this->config->getUserValue($targetUid, 'user_group_admin', 'external_group', '') === $gid;
+		//
+		// The creating-group membership is exactly the row that still carries an
+		// invitation_email (set at signup, kept thereafter). Existing users who accepted
+		// an invite have it cleared, and memberships added later to other groups never
+		// had it — so neither is ever disabled. We read it from the member row (which
+		// syncs to every node) rather than a user-value that only exists on the node
+		// where signup happened to run.
+		$isCreatingGroup = false;
+		try {
+			$row = $this->memberMapper->findByGidUid($gid, $targetUid);
+			$isCreatingGroup = $row->getInvitationEmail() !== '' && $row->getStatus() === GroupMember::STATUS_ACCEPTED;
+		} catch (DoesNotExistException) {
+			// no local row (already gone / pending elsewhere) — nothing to disable
+		}
 
 		$this->memberMapper->deleteByGidUid($gid, $targetUid);
 		$user = $this->userManager->get($targetUid);
