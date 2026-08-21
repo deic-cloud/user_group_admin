@@ -118,4 +118,47 @@ class GrantFolderManager {
 
 		$this->shardingAdapter->setGrantSyncHide($uid, $anySyncHide);
 	}
+
+	/**
+	 * Delete the per-member grant folders for a group (used when the group is deleted).
+	 * Runs on every node; the is_dir gate means each node only removes the folders of
+	 * members whose home is here (a grant folder lives only on its member's home silo).
+	 * Removes content from disk AND from oc_filecache. DESTRUCTIVE — only invoked on an
+	 * owner-initiated group deletion (a member merely leaving keeps their content).
+	 */
+	public function deleteGroupGrantFolders(string $gid, array $uids): void {
+		$dataDir = rtrim((string) $this->config->getSystemValue('datadirectory', ''), '/');
+		if ($dataDir === '') {
+			return;
+		}
+		foreach ($uids as $uid) {
+			$path = $dataDir . '/' . $uid . '/files/' . self::GRANT_DIR . '/' . $gid;
+			if (!is_dir($path)) {
+				continue; // not this member's home node
+			}
+			$this->rrmdir($path);
+			try {
+				$this->rootFolder->getUserFolder($uid)->getStorage()->getCache()
+					->remove('files/' . self::GRANT_DIR . '/' . $gid);
+			} catch (\Throwable $e) {
+				$this->logger->warning('user_group_admin: failed to clear grant-folder cache for ' . $uid . '/' . $gid . ': ' . $e->getMessage());
+			}
+			$this->logger->info('user_group_admin: deleted grant folder ' . $path . ' (group deleted)');
+		}
+	}
+
+	/** Recursively delete a directory tree. */
+	private function rrmdir(string $dir): void {
+		if (!is_dir($dir)) {
+			return;
+		}
+		$it = new \RecursiveIteratorIterator(
+			new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+			\RecursiveIteratorIterator::CHILD_FIRST,
+		);
+		foreach ($it as $f) {
+			$f->isDir() ? @rmdir($f->getPathname()) : @unlink($f->getPathname());
+		}
+		@rmdir($dir);
+	}
 }

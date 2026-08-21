@@ -26,6 +26,7 @@ class GroupService {
 		private IShardingAdapter      $shardingService,
 		private INotificationManager  $notificationManager,
 		private IActivityManager      $activityManager,
+		private GrantFolderManager    $grantFolderManager,
 		private LoggerInterface       $logger,
 		private \OCP\EventDispatcher\IEventDispatcher $eventDispatcher,
 		private \OCP\IConfig $config,
@@ -183,7 +184,12 @@ class GroupService {
 		// Clear any pending invitation / join-request / ownership-offer notifications
 		// for this group's members before the rows disappear, so nobody is left with a
 		// notification pointing at a deleted group.
-		$this->dismissAllGroupNotifications($group, $this->memberMapper->findByGid($gid));
+		$members = $this->memberMapper->findByGid($gid);
+		$this->dismissAllGroupNotifications($group, $members);
+
+		// Deleting the group reclaims its grant folders (owner's intent: free the storage
+		// / remove the content). A member merely leaving keeps theirs — only deletion wipes.
+		$this->grantFolderManager->deleteGroupGrantFolders($gid, array_map(fn ($m) => $m->getUid(), $members));
 
 		$this->memberMapper->deleteByGid($gid);
 		$this->groupMapper->deleteByGid($gid);

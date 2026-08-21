@@ -448,10 +448,15 @@ async function saveSettings() {
 }
 
 async function confirmDelete() {
+	const grantVal = editStorageGrant.value?.id ?? editStorageGrant.value
+	const hasGrant = !!grantVal && grantVal !== 'none'
+	const message = hasGrant
+		? t('user_group_admin', 'Delete this group? This cannot be undone.\n\nThis group has grant folders: deleting it will PERMANENTLY DELETE every member’s grant folder for this group and all of its contents. (Removing a member instead keeps their folder.)')
+		: t('user_group_admin', 'Delete this group? This cannot be undone.')
 	if (!await askConfirm({
 		title: t('user_group_admin', 'Delete group'),
-		message: t('user_group_admin', 'Delete this group? This cannot be undone.'),
-		confirmLabel: t('user_group_admin', 'Delete'),
+		message,
+		confirmLabel: hasGrant ? t('user_group_admin', 'Delete group and grant folders') : t('user_group_admin', 'Delete'),
 		variant: 'error',
 	})) return
 	try {

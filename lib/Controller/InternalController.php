@@ -9,6 +9,7 @@ use OCA\UserGroupAdmin\Db\Group;
 use OCA\UserGroupAdmin\Db\GroupMapper;
 use OCA\UserGroupAdmin\Db\GroupMember;
 use OCA\UserGroupAdmin\Db\GroupMemberMapper;
+use OCA\UserGroupAdmin\Service\GrantFolderManager;
 use OCA\UserGroupAdmin\Service\GroupSyncService;
 use OCP\Accounts\IAccountManager;
 use OCP\Activity\IManager as IActivityManager;
@@ -41,6 +42,7 @@ class InternalController extends Controller {
 		private INotificationManager $notificationManager,
 		private IAccountManager   $accountManager,
 		private IActivityManager  $activityManager,
+		private GrantFolderManager $grantFolderManager,
 		private IConfig           $config,
 		private \OCP\EventDispatcher\IEventDispatcher $eventDispatcher,
 	) {
@@ -114,6 +116,10 @@ class InternalController extends Controller {
 		// Dismiss this node's pending notifications for the group's members before
 		// the rows go — each silo clears its own users' (possibly cross-silo) copies.
 		$this->dismissAllGroupNotifications($gid);
+
+		// Reclaim grant folders for THIS node's resident members (is_dir gate inside).
+		$members = $this->memberMapper->findByGid($gid);
+		$this->grantFolderManager->deleteGroupGrantFolders($gid, array_map(fn ($m) => $m->getUid(), $members));
 
 		$this->memberMapper->deleteByGid($gid);
 		$this->groupMapper->deleteByGid($gid);
