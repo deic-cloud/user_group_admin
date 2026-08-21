@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\UserGroupAdmin\Service;
 
 use OCA\UserGroupAdmin\Db\GroupMapper;
+use OCP\Files\IRootFolder;
 use OCP\IConfig;
 use Psr\Log\LoggerInterface;
 
@@ -27,6 +28,7 @@ class GrantFolderManager {
 		private GroupMapper       $groupMapper,
 		private IConfig           $config,
 		private IShardingAdapter  $shardingAdapter,
+		private IRootFolder       $rootFolder,
 		private LoggerInterface   $logger,
 	) {}
 
@@ -49,11 +51,13 @@ class GrantFolderManager {
 		}
 
 		$grantParent = $dataDir . '/' . $uid . '/files/' . self::GRANT_DIR;
+		$dirty = false; // any mkdir/rename this pass → scan into oc_filecache at the end
 
 		// One-time migration: rename legacy Grants → .uga_grants
 		$oldParent = $dataDir . '/' . $uid . '/files/Grants';
 		if (!is_dir($grantParent) && is_dir($oldParent)) {
 			if (rename($oldParent, $grantParent)) {
+				$dirty = true;
 				$this->logger->info('user_group_admin: migrated grant parent ' . $oldParent . ' → ' . $grantParent);
 			} else {
 				$this->logger->warning('user_group_admin: could not migrate grant parent ' . $oldParent . ' → ' . $grantParent);
@@ -65,6 +69,7 @@ class GrantFolderManager {
 				$this->logger->warning('user_group_admin: could not create grant parent ' . $grantParent);
 				return;
 			}
+			$dirty = true;
 		}
 
 		$anySyncHide = false;
@@ -77,6 +82,7 @@ class GrantFolderManager {
 			$oldPath = $dataDir . '/' . $uid . '/user_group_admin/' . $gid;
 			if (!is_dir($path) && is_dir($oldPath)) {
 				if (rename($oldPath, $path)) {
+					$dirty = true;
 					$this->logger->info('user_group_admin: migrated grant folder ' . $oldPath . ' → ' . $path);
 				} else {
 					$this->logger->warning('user_group_admin: could not migrate ' . $oldPath . ' → ' . $path);
@@ -88,11 +94,25 @@ class GrantFolderManager {
 					$this->logger->warning('user_group_admin: could not create grant folder ' . $path);
 					continue;
 				}
+				$dirty = true;
 				$this->logger->info('user_group_admin: created grant folder ' . $path);
 			}
 
 			if ($group->getGrantSyncHide()) {
 				$anySyncHide = true;
+			}
+		}
+
+		// The folders were created with raw mkdir()/rename() on disk, so they're absent
+		// from oc_filecache until something scans them — which is why a just-provisioned
+		// grant folder 404s over WebDAV/Files until a later pass catches up. Scan the
+		// grant tree into the member's home storage now so it's browsable immediately.
+		if ($dirty) {
+			try {
+				$storage = $this->rootFolder->getUserFolder($uid)->getStorage();
+				$storage->getScanner()->scan('files/' . self::GRANT_DIR);
+			} catch (\Throwable $e) {
+				$this->logger->warning('user_group_admin: failed to scan grant folders for ' . $uid . ': ' . $e->getMessage());
 			}
 		}
 
