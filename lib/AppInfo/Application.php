@@ -7,6 +7,7 @@ namespace OCA\UserGroupAdmin\AppInfo;
 use OCA\DAV\Events\SabrePluginAddEvent;
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\UserGroupAdmin\Activity\Provider as ActivityProvider;
+use OCA\UserGroupAdmin\Activity\Setting as ActivitySetting;
 use OCA\UserGroupAdmin\BackgroundJob\GrantFolderUsage;
 use OCA\UserGroupAdmin\Group\GroupBackend;
 use OCA\UserGroupAdmin\Listener\EnsureDomainGroupListener;
@@ -74,8 +75,9 @@ class Application extends App implements IBootstrap {
 			->addBackend($container->get(GroupBackend::class));
 
 		try {
-			$container->get(IActivityManager::class)
-				->registerProvider(ActivityProvider::class);
+			$activityManager = $container->get(IActivityManager::class);
+			$activityManager->registerProvider(ActivityProvider::class);
+			$activityManager->registerSetting(ActivitySetting::class);
 		} catch (\Throwable) {}
 
 	}
