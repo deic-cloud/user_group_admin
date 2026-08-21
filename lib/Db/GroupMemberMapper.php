@@ -68,6 +68,29 @@ class GroupMemberMapper extends QBMapper {
 		return (int)$sum;
 	}
 
+	/** Total grant-folder usage across all accepted members of a group. */
+	public function sumStorageUsed(string $gid): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->sum('storage_used'))
+		   ->from($this->getTableName())
+		   ->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
+		   ->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(GroupMember::STATUS_ACCEPTED, IQueryBuilder::PARAM_INT)));
+		$cursor = $qb->executeQuery();
+		$sum = $cursor->fetchOne();
+		$cursor->closeCursor();
+		return (int)$sum;
+	}
+
+	/** Set a member's grant-folder usage (storage_used) directly — no sync/events. */
+	public function updateStorageUsed(string $gid, string $uid, int $bytes): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+		   ->set('storage_used', $qb->createNamedParameter($bytes, IQueryBuilder::PARAM_INT))
+		   ->where($qb->expr()->eq('gid', $qb->createNamedParameter($gid)))
+		   ->andWhere($qb->expr()->eq('uid', $qb->createNamedParameter($uid)));
+		$qb->executeStatement();
+	}
+
 	/** @return GroupMember[] accepted memberships for $uid */
 	public function findByUid(string $uid, bool $acceptedOnly = true): array {
 		$qb = $this->db->getQueryBuilder();

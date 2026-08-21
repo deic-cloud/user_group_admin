@@ -22,6 +22,7 @@ return [
 		['name' => 'internal#searchUsers',  'url' => '/internal/users/search',                            'verb' => 'GET'],
 		['name' => 'internal#notifyExternalSignup', 'url' => '/internal/notify/external-signup',          'verb' => 'POST'],
 		['name' => 'internal#publishActivity',      'url' => '/internal/activity/publish',                'verb' => 'POST'],
+		['name' => 'internal#syncMemberUsage',      'url' => '/internal/groups/{gid}/members/{uid}/usage', 'verb' => 'POST'],
 	],
 	'ocs' => [
 		// Users

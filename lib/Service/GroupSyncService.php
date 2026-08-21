@@ -112,6 +112,21 @@ class GroupSyncService {
 		return $master !== '' ? [$master] : [];
 	}
 
+	/**
+	 * Propagate a member's grant-folder usage (storage_used) to all peers. Lightweight
+	 * (sets one column, no events/fan-out) and idempotent, so it's safe to broadcast to
+	 * every peer — each node needs every member's usage for the local pool cap
+	 * (GrantQuotaWrapper::sumStorageUsedExcept). Measured once per member on their home
+	 * node (the only node their grant folder lives on) by the daily GrantFolderUsage job.
+	 */
+	public function pushMemberUsage(string $gid, string $uid, int $bytes): void {
+		$path = 'internal/groups/' . rawurlencode($gid) . '/members/' . rawurlencode($uid) . '/usage';
+		$payload = ['bytes' => (string)$bytes];
+		foreach ($this->syncTargets() as $url) {
+			$this->post($url, $path, $payload);
+		}
+	}
+
 	/** Tell all peers to remove a member from a group. */
 	public function removeMemberOnAllSilos(string $gid, string $uid, string $email = ''): void {
 		$path = 'internal/groups/' . rawurlencode($gid) . '/members/' . rawurlencode($uid) . '/delete';

@@ -318,6 +318,18 @@ class InternalController extends Controller {
 		return $this->userManager->get($uid) !== null;
 	}
 
+	/**
+	 * Receive a propagated grant-folder usage value for a member (from the home node's
+	 * daily measurement). Sets storage_used only — no events/fan-out. Idempotent.
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function syncMemberUsage(string $gid, string $uid, string $bytes = '0'): JSONResponse {
+		if ($err = $this->checkSecret()) return $err;
+		$this->memberMapper->updateStorageUsed($gid, $uid, (int)$bytes);
+		return new JSONResponse(['success' => true]);
+	}
+
 	// ── Helpers ───────────────────────────────────────────────────────────────
 
 	private function upsertGroup(array $data): void {
