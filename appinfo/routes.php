@@ -21,6 +21,7 @@ return [
 		['name' => 'internal#deleteMember', 'url' => '/internal/groups/{gid}/members/{uid}/delete',       'verb' => 'POST'],
 		['name' => 'internal#searchUsers',  'url' => '/internal/users/search',                            'verb' => 'GET'],
 		['name' => 'internal#notifyExternalSignup', 'url' => '/internal/notify/external-signup',          'verb' => 'POST'],
+		['name' => 'internal#publishActivity',      'url' => '/internal/activity/publish',                'verb' => 'POST'],
 	],
 	'ocs' => [
 		// Users

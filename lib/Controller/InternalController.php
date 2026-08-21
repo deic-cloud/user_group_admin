@@ -11,6 +11,7 @@ use OCA\UserGroupAdmin\Db\GroupMember;
 use OCA\UserGroupAdmin\Db\GroupMemberMapper;
 use OCA\UserGroupAdmin\Service\GroupSyncService;
 use OCP\Accounts\IAccountManager;
+use OCP\Activity\IManager as IActivityManager;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
@@ -39,6 +40,7 @@ class InternalController extends Controller {
 		private IShardingAdapter  $shardingService,
 		private INotificationManager $notificationManager,
 		private IAccountManager   $accountManager,
+		private IActivityManager  $activityManager,
 		private IConfig           $config,
 		private \OCP\EventDispatcher\IEventDispatcher $eventDispatcher,
 	) {
@@ -254,6 +256,60 @@ class InternalController extends Controller {
 		} catch (\Throwable $e) {
 			// best effort — contact details are also carried in the owner notification
 		}
+	}
+
+	/**
+	 * Publish an activity for $uid, but only on the node where $uid is local
+	 * (delivered here via the group-sync star from GroupService::publishActivity).
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	public function publishActivity(
+		string $subject = '', string $params = '', string $author = '',
+		string $uid = '', string $timestamp = '',
+	): JSONResponse {
+		if ($err = $this->checkSecret()) return $err;
+
+		$p = json_decode($params, true);
+		if (!is_array($p)) { $p = []; }
+		$ts = (int)$timestamp ?: time();
+
+		// Publish here only if this is the affected user's HOME node.
+		if ($this->isUserHomeHere($uid)) {
+			try {
+				$event = $this->activityManager->generateEvent();
+				$event->setApp('user_group_admin')
+					->setType('group_membership')
+					->setAuthor($author)
+					->setTimestamp($ts)
+					->setAffectedUser($uid)
+					->setObject('group', 0, $p['gid'] ?? '')
+					->setSubject($subject, $p);
+				$this->activityManager->publish($event);
+			} catch (\Throwable) {
+			}
+		}
+
+		// Star hub: the master relays to all silos (one level; silos never relay).
+		if ($this->shardingService->isMaster()) {
+			$this->syncService->deliverActivity($subject, $p, $author, $uid, $ts);
+		}
+
+		return new JSONResponse(['success' => true]);
+	}
+
+	/** Home-node test — see GroupService::isUserHomeHere (same logic). */
+	private function isUserHomeHere(string $uid): bool {
+		if ($uid === '') {
+			return false;
+		}
+		if ($this->shardingService->isMaster()) {
+			$server = $this->shardingService->getUserServer($uid);
+			if ($server !== null) {
+				return $this->shardingService->isSelf($server);
+			}
+		}
+		return $this->userManager->get($uid) !== null;
 	}
 
 	// ── Helpers ───────────────────────────────────────────────────────────────

@@ -78,6 +78,40 @@ class GroupSyncService {
 		}
 	}
 
+	/**
+	 * Deliver an activity to the node where $uid is local — reuses the group-sync star,
+	 * no separate activity topology. Hub routing (avoids double-publish, since publish is
+	 * NOT idempotent): a silo sends only to the master, which relays to all silos; the
+	 * master sends directly to all silos. Each receiver publishes only if the user is
+	 * local there (see InternalController::publishActivity, which does the master relay).
+	 */
+	public function deliverActivity(string $subject, array $params, string $author, string $uid, int $timestamp): void {
+		$payload = [
+			'subject'   => $subject,
+			'params'    => json_encode($params),
+			'author'    => $author,
+			'uid'       => $uid,
+			'timestamp' => (string)$timestamp,
+		];
+		foreach ($this->activityHubTargets() as $url) {
+			$this->post($url, 'internal/activity/publish', $payload);
+		}
+	}
+
+	/** @return string[] where to send an activity for hub (star) routing */
+	private function activityHubTargets(): array {
+		if ($this->shardingService->isMaster()) {
+			$urls = [];
+			foreach ($this->shardingService->getAllServers() as $server) {
+				if ($this->shardingService->isSelf($server)) { continue; }
+				$urls[] = $this->shardingService->apiUrlForServer($server);
+			}
+			return array_unique($urls);
+		}
+		$master = $this->shardingService->masterInternalUrl();
+		return $master !== '' ? [$master] : [];
+	}
+
 	/** Tell all peers to remove a member from a group. */
 	public function removeMemberOnAllSilos(string $gid, string $uid, string $email = ''): void {
 		$path = 'internal/groups/' . urlencode($gid) . '/members/' . urlencode($uid) . '/delete';

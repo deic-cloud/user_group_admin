@@ -667,14 +667,43 @@ class GroupService {
 		return [bin2hex(random_bytes(32)), bin2hex(random_bytes(32))];
 	}
 
-	/** Publish an activity event to one or more affected users. */
+	/**
+	 * Publish an activity event to one or more affected users, delivering each to the
+	 * node where that user actually lives. No separate topology: an affected user who
+	 * is local (self-actions and same-node recipients — the common case) is published
+	 * here; a recipient on another node is handed to the existing group-sync star, and
+	 * whichever node the user is local on publishes it (see InternalController::publishActivity).
+	 */
+	private function isUserHomeHere(string $uid): bool {
+		if ($uid === '') {
+			return false;
+		}
+		// Master holds the whole directory, so mere existence is meaningless there —
+		// use files_sharding residency. Users with no residency record (e.g. admin,
+		// whose home is master) fall back to local existence. Silos hold only their
+		// own users, so local existence == home.
+		if ($this->shardingService->isMaster()) {
+			$server = $this->shardingService->getUserServer($uid);
+			if ($server !== null) {
+				return $this->shardingService->isSelf($server);
+			}
+		}
+		return $this->userManager->get($uid) !== null;
+	}
+
 	private function publishActivity(string $subject, array $params, string $author, string ...$affectedUsers): void {
+		$ts = time();
 		foreach ($affectedUsers as $uid) {
+			if ($uid !== '' && !$this->isUserHomeHere($uid)) {
+				$this->syncService->deliverActivity($subject, $params, $author, $uid, $ts);
+				continue;
+			}
 			try {
 				$event = $this->activityManager->generateEvent();
 				$event->setApp('user_group_admin')
 					->setType('group_membership')
 					->setAuthor($author)
+					->setTimestamp($ts)
 					->setAffectedUser($uid)
 					->setObject('group', 0, $params['gid'] ?? '')
 					->setSubject($subject, $params);
