@@ -35,7 +35,7 @@ class Notifier implements INotifier {
 			$notification->setParsedMessage($l->t('Invited by %s', [$p['inviter']]));
 
 			$base = '/ocs/v2.php/apps/user_group_admin/api/v1/groups/'
-				. urlencode($gid) . '/members/' . urlencode($uid);
+				. rawurlencode($gid) . '/members/' . rawurlencode($uid);
 
 			$accept = $notification->createAction();
 			$accept->setLabel('accept')
@@ -62,7 +62,7 @@ class Notifier implements INotifier {
 			$notification->setParsedSubject($l->t('"%s" wants to join group "%s"', [$requester, $gid]));
 
 			$base = '/ocs/v2.php/apps/user_group_admin/api/v1/groups/'
-				. urlencode($gid) . '/members/' . urlencode($requester);
+				. rawurlencode($gid) . '/members/' . rawurlencode($requester);
 
 			$approve = $notification->createAction();
 			$approve->setLabel('approve')
@@ -111,7 +111,7 @@ class Notifier implements INotifier {
 				? $l->t('Offered by %s. Accepting makes you responsible for its storage and billing (committed pool: %s).', [$p['inviter'], $committed])
 				: $l->t('Offered by %s. Accepting makes you responsible for its storage and billing.', [$p['inviter']]));
 
-			$base = '/ocs/v2.php/apps/user_group_admin/api/v1/groups/' . urlencode($gid) . '/owner/pending';
+			$base = '/ocs/v2.php/apps/user_group_admin/api/v1/groups/' . rawurlencode($gid) . '/owner/pending';
 
 			$accept = $notification->createAction();
 			$accept->setLabel('accept')

@@ -52,13 +52,13 @@ class GroupSyncService {
 	/** Tell all peers to delete a group. */
 	public function deleteGroupOnAllSilos(string $gid): void {
 		foreach ($this->syncTargets() as $url) {
-			$this->post($url, 'internal/groups/' . urlencode($gid) . '/delete');
+			$this->post($url, 'internal/groups/' . rawurlencode($gid) . '/delete');
 		}
 	}
 
 	/** Push a single membership record to all peers. */
 	public function pushMemberToAllSilos(GroupMember $member): void {
-		$path    = 'internal/groups/' . urlencode($member->getGid()) . '/members/sync';
+		$path    = 'internal/groups/' . rawurlencode($member->getGid()) . '/members/sync';
 		$payload = ['member' => json_encode($member->toSyncArray())];
 		foreach ($this->syncTargets() as $url) {
 			if (!$this->post($url, $path, $payload)) {
@@ -114,7 +114,7 @@ class GroupSyncService {
 
 	/** Tell all peers to remove a member from a group. */
 	public function removeMemberOnAllSilos(string $gid, string $uid, string $email = ''): void {
-		$path = 'internal/groups/' . urlencode($gid) . '/members/' . urlencode($uid) . '/delete';
+		$path = 'internal/groups/' . rawurlencode($gid) . '/members/' . rawurlencode($uid) . '/delete';
 		if ($email !== '') {
 			$path .= '?email=' . urlencode($email);
 		}

@@ -146,8 +146,14 @@ class InternalController extends Controller {
 		$this->handleMemberNotification($gid, $mData);
 
 		if ($this->shardingService->isMaster()) {
-			$memberObj = $this->memberMapper->findByGidUid($gid, $mData['uid'] ?? '');
-			$this->syncService->pushMemberToAllSilos($memberObj);
+			// Re-fetch with the gid from the PAYLOAD (what upsertMember wrote), not the
+			// route $gid — and don't 500 the sync if the row is genuinely absent.
+			try {
+				$memberObj = $this->memberMapper->findByGidUid($mData['gid'] ?? $gid, $mData['uid'] ?? '');
+				$this->syncService->pushMemberToAllSilos($memberObj);
+			} catch (\OCP\AppFramework\Db\DoesNotExistException) {
+				// nothing to relay
+			}
 		}
 
 		return new JSONResponse(['success' => true]);
