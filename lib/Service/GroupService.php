@@ -555,9 +555,11 @@ class GroupService {
 		// syncs to every node) rather than a user-value that only exists on the node
 		// where signup happened to run.
 		$isCreatingGroup = false;
+		$wasStatus = null;
 		try {
 			$row = $this->memberMapper->findByGidUid($gid, $targetUid);
-			$isCreatingGroup = $row->getInvitationEmail() !== '' && $row->getStatus() === GroupMember::STATUS_ACCEPTED;
+			$wasStatus = $row->getStatus();
+			$isCreatingGroup = $row->getInvitationEmail() !== '' && $wasStatus === GroupMember::STATUS_ACCEPTED;
 		} catch (DoesNotExistException) {
 			// no local row (already gone / pending elsewhere) — nothing to disable
 		}
@@ -575,11 +577,25 @@ class GroupService {
 		$this->dismissInvitationNotification($gid, $targetUid);
 		$this->dismissJoinRequestNotification($gid, $targetUid, $owner);
 		if ($isSelf) {
-			$this->publishActivity('member_left', ['gid' => $gid], $callerUid, $callerUid, $owner);
+			if ($wasStatus === GroupMember::STATUS_PENDING) {
+				// Declining an invitation (not leaving an accepted membership): tell the owner.
+				$this->publishActivity('invitation_declined', ['gid' => $gid, 'uid' => $targetUid], $callerUid, $owner);
+			} else {
+				$this->publishActivity('member_left', ['gid' => $gid], $callerUid, $callerUid, $owner);
+			}
 		} else {
 			$this->publishActivity('member_removed',      ['gid' => $gid, 'uid' => $targetUid], $callerUid, $callerUid);
 			$this->publishActivity('member_removed_from', ['gid' => $gid],                       $callerUid, $targetUid);
 		}
+	}
+
+	/**
+	 * Publish an activity to a single affected user, routed to that user's home node.
+	 * Public wrapper so other services (e.g. InvitationService on an email-link decline)
+	 * can emit owner-facing activities without duplicating the home-node routing.
+	 */
+	public function publishActivityFor(string $subject, array $params, string $author, string $affectedUser): void {
+		$this->publishActivity($subject, $params, $author, $affectedUser);
 	}
 
 	// ── Queries ───────────────────────────────────────────────────────────────

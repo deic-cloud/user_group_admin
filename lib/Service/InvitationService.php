@@ -29,6 +29,7 @@ class InvitationService {
 		private IGroupManager        $groupManager,
 		private IShardingAdapter     $shardingService,
 		private GroupSyncService     $syncService,
+		private GroupService         $groupService,
 		private IMailer              $mailer,
 		private IURLGenerator        $urlGenerator,
 		private IConfig              $config,
@@ -300,7 +301,19 @@ class InvitationService {
 		$this->memberMapper->update($member);
 		$this->syncService->pushMemberToAllSilos($member);
 
-		return $member->getGid();
+		$gid = $member->getGid();
+		// Let the group owner know the invitee declined (routed to the owner's home node).
+		try {
+			$owner = $this->groupMapper->findByGid($gid)->getOwner();
+			if ($owner !== '' && $owner !== Group::HIDDEN_OWNER) {
+				$decliner = $member->getInvitationEmail() !== '' ? $member->getInvitationEmail() : $member->getUid();
+				$this->groupService->publishActivityFor('invitation_declined', ['gid' => $gid, 'uid' => $decliner], $decliner, $owner);
+			}
+		} catch (\Throwable $e) {
+			$this->logger->warning('user_group_admin: failed to publish decline activity: ' . $e->getMessage());
+		}
+
+		return $gid;
 	}
 
 	public function isCurator(string $ownerUid, string $targetUid): bool {

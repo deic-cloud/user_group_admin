@@ -29,6 +29,7 @@ class Provider implements IProvider {
 			'member_left'     => $l->t('You left group "%s"',                       [$p['gid']]),
 			'member_removed'  => $l->t('You removed %s from group "%s"',            [$p['uid'], $p['gid']]),
 			'member_removed_from' => $l->t('You were removed from group "%s"',      [$p['gid']]),
+			'invitation_declined' => $l->t('%1$s declined your invitation to group "%2$s"', [$p['uid'] ?? '', $p['gid']]),
 			'join_requested'  => $l->t('You requested to join group "%s"',          [$p['gid']]),
 			'join_request_received' => $l->t('%s requested to join your group "%s"', [$p['uid'], $p['gid']]),
 			'join_approved'   => $l->t('You approved %s joining group "%s"',        [$p['uid'], $p['gid']]),
