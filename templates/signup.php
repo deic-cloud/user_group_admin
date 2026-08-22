@@ -9,8 +9,10 @@
 	<p class="uga-signup-note"><?php p($l->t('The preferred way to obtain an account is to sign in via your home institution (WAYF/eduGAIN). Only create an external account here if that is not possible.')) ?></p>
 	<p><?php p($l->t('Your username will be the email address the invitation was sent to: %s', [$_['email']])) ?></p>
 
+	<?php $backUrl = \OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('user_group_admin.signup.showForm', ['token' => $_['token']]); ?>
 	<?php if (!empty($_['error'])): ?>
 		<p class="uga-signup-error"><?php p($_['error']) ?></p>
+		<p><a href="<?php p($backUrl) ?>">&larr; <?php p($l->t('Go back and choose how to join (Log in / Sign up)')) ?></a></p>
 	<?php endif ?>
 
 	<form method="post" action="" class="uga-signup-form">
@@ -46,6 +48,7 @@
 			<?php p($l->t('Proceed')) ?>
 		</button>
 	</form>
+	<p class="uga-signup-back"><a href="<?php p($backUrl) ?>">&larr; <?php p($l->t('Back')) ?></a></p>
 </div>
 
 <style>
@@ -54,6 +57,7 @@
 .uga-signup-wrap p { margin: 0.5em 0; }
 .uga-signup-note { font-size: .9em; color: var(--color-text-maxcontrast); }
 .uga-signup-error { color: var(--color-error-text, var(--color-error)); margin: 1em 0; font-weight: bold; }
+.uga-signup-back { margin-top: 1.5em; font-size: .9em; }
 .uga-signup-field { margin-top: 1em; }
 .uga-signup-field label { display: block; font-weight: bold; margin-bottom: 0.25em; }
 .uga-signup-input {
