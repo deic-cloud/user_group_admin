@@ -136,9 +136,17 @@ class GroupBackend extends ABackend implements
 	// ── IGroupDetailsBackend ──────────────────────────────────────────────────
 
 	public function getGroupDetails(string $gid): array {
-		// Use the gid as the group's display name (share picker, "Shared with …" labels,
-		// etc.) — the description is vague/ambiguous as an identifier. The description is
-		// surfaced separately in our own group UI, and as a hover on the picker result.
+		// IMPORTANT: an EMPTY array means "this backend has no such group". NC's
+		// GroupManager::getGroupObject() treats any non-empty return as proof the
+		// group exists, so returning details for a gid we don't actually have makes
+		// groupManager->get() report a phantom group — which surfaced as a bogus
+		// exact "my" entry in the share picker when typing a prefix of a real gid.
+		if (!$this->groupMapper->existsByGid($gid)) {
+			return [];
+		}
+		// Use the gid as the group's display name (share picker, "Shared with …"
+		// labels, etc.) — the description is vague/ambiguous as an identifier and is
+		// surfaced separately in our own group UI.
 		return ['displayName' => $gid];
 	}
 
