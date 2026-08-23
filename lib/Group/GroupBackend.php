@@ -136,12 +136,10 @@ class GroupBackend extends ABackend implements
 	// ── IGroupDetailsBackend ──────────────────────────────────────────────────
 
 	public function getGroupDetails(string $gid): array {
-		try {
-			$g = $this->groupMapper->findByGid($gid);
-			return ['displayName' => $g->getDescription() ?: $g->getGid()];
-		} catch (DoesNotExistException) {
-			return ['displayName' => $gid];
-		}
+		// Use the gid as the group's display name (share picker, "Shared with …" labels,
+		// etc.) — the description is vague/ambiguous as an identifier. The description is
+		// surfaced separately in our own group UI, and as a hover on the picker result.
+		return ['displayName' => $gid];
 	}
 
 	// ── ICountUsersBackend ────────────────────────────────────────────────────

@@ -69,7 +69,11 @@ class GroupMapper extends QBMapper {
 		   ->andWhere($qb->expr()->isNull('m.uid'))
 		   ->andWhere($qb->expr()->neq('g.owner', $qb->createNamedParameter($uid)));
 		if ($search !== '') {
-			$qb->andWhere($qb->expr()->iLike('g.gid', $qb->createNamedParameter('%' . $this->db->escapeLikeParameter($search) . '%')));
+			$like = '%' . $this->db->escapeLikeParameter($search) . '%';
+			$qb->andWhere($qb->expr()->orX(
+				$qb->expr()->iLike('g.gid', $qb->createNamedParameter($like)),
+				$qb->expr()->iLike('g.description', $qb->createNamedParameter($like)),
+			));
 		}
 		$qb->setMaxResults($limit)->setFirstResult($offset);
 		return $this->findEntities($qb);
