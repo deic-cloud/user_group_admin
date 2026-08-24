@@ -3,18 +3,27 @@
 declare(strict_types=1);
 
 /**
- * Grant-folder DAV endpoint.
+ * Grant-folder DAV endpoint: /remote.php/grantfolders/ (canonical; the legacy
+ * /remote.php/user_group_admin/ service name still resolves here).
  *
- * Member  access: any WebDAV method on /remote.php/user_group_admin/{gid}/
- *   → serves {datadirectory}/{memberUid}/user_group_admin/{gid}/
+ * Root listing:  PROPFIND /remote.php/grantfolders/
+ *   → one directory per grant group the user is an accepted member of or owns
+ *     (old-service docs model, term now GRANT folders — NOT shared with the
+ *     group; only, optionally, visible to the owner).
+ *
+ * Member access: any WebDAV method on /remote.php/grantfolders/{gid}/
+ *   → serves {datadirectory}/{memberUid}/files/.uga_grants/{gid}/
  *     (read-write; quota enforced by GrantPropertiesPlugin)
  *
- * Owner access:   any WebDAV method on /remote.php/user_group_admin/{gid}/
- *   → serves a virtual directory listing all accepted members' grant folders:
- *     {datadirectory}/{memberUid}/user_group_admin/{gid}/  per member (read-only)
+ * Owner access:  any WebDAV method on /remote.php/grantfolders/{gid}/
+ *   → a virtual directory listing all accepted members' grant folders
+ *     (the "binoculars" view), one subdirectory per member uid.
  *
- * Grant folders live OUTSIDE the member's files/ tree; NC's Files view never
- * sees them.  Space is accounted to the group owner via files_accounting.
+ * Grant folders are concealed from the DEFAULT WebDAV surface (files_sharding
+ * conceal gate) and from sync clients; this endpoint is the WebDAV surface.
+ * Space is accounted to the group owner via files_accounting. On production
+ * the pretty URL /grantfolders/ is an Apache rewrite (mfsbsd
+ * nc_htaccess_custom.conf) onto this endpoint.
  */
 
 use OCA\UserGroupAdmin\DAV\GrantDirectory;
@@ -55,16 +64,40 @@ if ($userSession->getUser() === null) {
 
 $uid = $userSession->getUser()->getUID();
 
-// ── Parse group ID from URL ───────────────────────────────────────────────────
+// ── Parse service + group ID from URL ────────────────────────────────────────
 
 $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-$prefix     = '/remote.php/user_group_admin/';
 $uriPath    = strtok($requestUri, '?') ?: '';
-$subPath    = str_starts_with($uriPath, $prefix) ? substr($uriPath, strlen($prefix)) : '';
-$gid        = explode('/', $subPath)[0];
+$service    = 'grantfolders';
+if (preg_match('#^/remote\.php/(grantfolders|user_group_admin)(/|$)#', $uriPath, $m)) {
+	$service = $m[1];
+}
+$prefix  = '/remote.php/' . $service . '/';
+$subPath = str_starts_with($uriPath, $prefix) ? substr($uriPath, strlen($prefix)) : '';
+$gid     = explode('/', $subPath)[0];
 
 if ($gid === '') {
-	http_response_code(400);
+	// ── Root listing: one directory per grant group (member of, or owner of).
+	// Depth-1 lists names only; descending requests carry the gid in the URL
+	// and are handled by the per-gid tree below, so empty placeholders are fine.
+	$groupMapper = \OC::$server->get(GroupMapper::class);
+	$gids = [];
+	foreach ($groupMapper->findGrantGroupsForMember($uid) as $g) {
+		$gids[$g->getGid()] = true;
+	}
+	foreach ($groupMapper->findByOwner($uid) as $g) {
+		if (!empty($g->getStorageGrant())) {
+			$gids[$g->getGid()] = true;
+		}
+	}
+	ksort($gids);
+	$children = [];
+	foreach (array_keys($gids) as $g) {
+		$children[] = new SimpleCollection($g);
+	}
+	$server = new Server(new SimpleCollection($service, $children));
+	$server->setBaseUri($prefix);
+	$server->exec();
 	exit;
 }
 
@@ -149,8 +182,7 @@ if (!$isOwner) {
 
 // ── Build Sabre DAV tree ──────────────────────────────────────────────────────
 
-$prefix  = '/remote.php/user_group_admin/';
-$baseUri = $prefix . $gid . '/';
+$baseUri = $prefix . $gid . '/'; // $prefix carries the requested service name
 
 if ($isOwner) {
 	$children = [];
