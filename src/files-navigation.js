@@ -211,6 +211,10 @@ const GROUPS_CACHE_KEY = 'uga_grant_groups_v1'
 let   grantGroups      = []
 
 function registerGroupView(group) {
+	// The Grants view is the MEMBER surface — always the user's own folder.
+	// The owner's overview of members' folders is the separate
+	// "Sponsored folders" view (2026-08-25); the old owner-mode branch here
+	// pointed at the legacy node-local endpoint and listed phantom member dirs.
 	const isOwner  = getCurrentUser()?.uid === group.owner
 	const grantRoot = '/' + GRANT_DIR + '/' + group.gid
 	// Passive transparency note for members: the sponsoring owner can view the
@@ -241,7 +245,7 @@ function registerGroupView(group) {
 					path = decoded.slice(decoded.indexOf(grantRoot) + grantRoot.length) || '/'
 				}
 			} catch (e) { /* ignore */ }
-			return getGrantContents(group.gid, path || '/', options, isOwner)
+			return getGrantContents(group.gid, path || '/', options, false)
 		},
 	}))
 }
@@ -288,9 +292,7 @@ Navigation.register(new View({
 		const parts   = rest.split('/')
 		const gid     = parts[0]
 		const subPath = '/' + parts.slice(1).join('/')
-		const grp     = grantGroups.find(g => g.gid === gid)
-		const isOwner = getCurrentUser()?.uid === grp?.owner
-		return getGrantContents(gid, subPath || '/', options, isOwner)
+		return getGrantContents(gid, subPath || '/', options, false)
 	},
 }))
 
