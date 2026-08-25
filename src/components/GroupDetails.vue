@@ -84,10 +84,10 @@
 						v-model="inviteEmail"
 						type="email"
 						:label="t('user_group_admin', 'Invite an external collaborator by email')"
-						:placeholder="t('user_group_admin', 'name@example.com')"
+						:placeholder="t('user_group_admin', 'name@example.com, other@example.org, …')"
 						class="uga-email-field"
 						@keyup.enter="inviteByEmail" />
-					<NcButton :disabled="!isValidEmail(inviteEmail)" @click="inviteByEmail">
+					<NcButton :disabled="!isValidEmailList(inviteEmail)" @click="inviteByEmail">
 						{{ t('user_group_admin', 'Invite via email') }}
 					</NcButton>
 				</div>
@@ -305,6 +305,15 @@ const inviteQuery = ref('')
 
 function isValidEmail(v) { return EMAIL_RE.test(v ?? '') }
 
+/** Split a comma-separated address list (old-service parity) and validate all. */
+function splitEmails(v) {
+	return String(v ?? '').split(',').map(e => e.trim()).filter(e => e !== '')
+}
+function isValidEmailList(v) {
+	const list = splitEmails(v)
+	return list.length > 0 && list.every(e => EMAIL_RE.test(e))
+}
+
 let searchTimer = null
 async function onUserSearch(query) {
 	if (!query || query.length < 2) { userOptions.value = []; searchingUsers.value = false; return }
@@ -357,19 +366,27 @@ async function inviteByUid(uid) {
 }
 
 async function inviteByEmail() {
-	if (!isValidEmail(inviteEmail.value)) return
+	// Accepts a single address or a comma-separated list (old-service parity).
+	if (!isValidEmailList(inviteEmail.value)) return
 	inviteError.value = ''
-	try {
-		await axios.post(
-			`${OCS}/groups/${encodeURIComponent(props.gid)}/members/external`,
-			{ email: inviteEmail.value },
-			{ headers: { 'OCS-APIREQUEST': 'true' } },
-		)
-		resetInviteForm()
-		loadMembers()
-	} catch (e) {
-		inviteError.value = e.response?.data?.ocs?.meta?.message ?? t('user_group_admin', 'Invitation failed')
+	const failed = []
+	for (const email of splitEmails(inviteEmail.value)) {
+		try {
+			await axios.post(
+				`${OCS}/groups/${encodeURIComponent(props.gid)}/members/external`,
+				{ email },
+				{ headers: { 'OCS-APIREQUEST': 'true' } },
+			)
+		} catch (e) {
+			failed.push(`${email}: ${e.response?.data?.ocs?.meta?.message ?? t('user_group_admin', 'Invitation failed')}`)
+		}
 	}
+	if (failed.length === 0) {
+		resetInviteForm()
+	} else {
+		inviteError.value = failed.join(' · ')
+	}
+	loadMembers()
 }
 
 async function approve(uid) {
