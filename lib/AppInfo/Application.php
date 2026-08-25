@@ -42,6 +42,9 @@ class Application extends App implements IBootstrap {
 
 	public function register(IRegistrationContext $context): void {
 		$context->registerEventListener(LoadAdditionalScriptsEvent::class, LoadFilesNavigationListener::class);
+		// Global: filters the sponsored-folder system shares out of files_sharing's
+		// share listings (web UI) — see the middleware's doc block.
+		$context->registerMiddleware(\OCA\UserGroupAdmin\Middleware\SponsoredShareFilterMiddleware::class, true);
 		$context->registerEventListener(UserLoggedInEvent::class, EnsureGrantFoldersListener::class);
 		$context->registerEventListener(UserLoggedInWithCookieEvent::class, EnsureGrantFoldersListener::class);
 		$context->registerEventListener(UserLoggedInEvent::class, EnsureDomainGroupListener::class);

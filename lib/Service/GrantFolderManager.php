@@ -7,6 +7,9 @@ namespace OCA\UserGroupAdmin\Service;
 use OCA\UserGroupAdmin\Db\GroupMapper;
 use OCP\Files\IRootFolder;
 use OCP\IConfig;
+use OCP\IUserManager;
+use OCP\Share\IManager as IShareManager;
+use OCP\Share\IShare;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -24,11 +27,22 @@ use Psr\Log\LoggerInterface;
 class GrantFolderManager {
 	public const GRANT_DIR = '.uga_grants';
 
+	/**
+	 * Mount-target prefix of the SYSTEM share of a member's grant folder to the
+	 * group owner (the "Sponsored folders" / binoculars surface). Full target:
+	 * /.uga_sponsored~{gid}~{memberUid}. Dot-prefixed so the owner's Files view
+	 * hides it by default; recognized by this prefix wherever the system shares
+	 * must be filtered out of normal share listings.
+	 */
+	public const SPONSORED_PREFIX = '/.uga_sponsored~';
+
 	public function __construct(
 		private GroupMapper       $groupMapper,
 		private IConfig           $config,
 		private IShardingAdapter  $shardingAdapter,
 		private IRootFolder       $rootFolder,
+		private IShareManager     $shareManager,
+		private IUserManager      $userManager,
 		private LoggerInterface   $logger,
 	) {}
 
@@ -117,6 +131,111 @@ class GrantFolderManager {
 		}
 
 		$this->shardingAdapter->setGrantSyncHide($uid, $anySyncHide);
+
+		// Sponsored-folders system shares: each member's grant folder is shared
+		// (read-only, app-managed) with the group OWNER — "in principle just a
+		// bunch of folders shared with the group owner that cannot be unshared"
+		// (Frederik). Riding the ordinary share machinery makes the owner's
+		// overview work CROSS-SILO via the proven federated mirror path,
+		// replacing the node-local is_dir view. Idempotent; re-created by the
+		// next provisioning pass if anything deletes one.
+		foreach ($groups as $group) {
+			$this->ensureOwnerShare($uid, $group->getGid(), $group->getOwner());
+		}
+	}
+
+	/** Create the member→owner system share for one grant folder, if absent. */
+	private function ensureOwnerShare(string $memberUid, string $gid, string $owner): void {
+		if ($owner === '' || $owner === $memberUid) {
+			return; // no self-share; the owner's own folder needs no overview share
+		}
+		try {
+			$node = $this->rootFolder->getUserFolder($memberUid)->get(self::GRANT_DIR . '/' . $gid);
+		} catch (\Throwable) {
+			return; // folder not scanned yet — next pass
+		}
+
+		$ownerLocal = $this->isUserLocal($owner);
+		$masterHost = (string)preg_replace('#^https?://#', '', rtrim($this->shardingAdapter->masterUrl(), '/'));
+		$remoteWith = $owner . '@' . $masterHost;
+
+		// Already shared? (either flavour)
+		foreach ([IShare::TYPE_USER, IShare::TYPE_REMOTE] as $type) {
+			try {
+				foreach ($this->shareManager->getSharesBy($memberUid, $type, $node, false, -1, 0) as $existing) {
+					$with = (string)$existing->getSharedWith();
+					if ($with === $owner || $with === $remoteWith) {
+						return;
+					}
+				}
+			} catch (\Throwable) {
+			}
+		}
+
+		try {
+			$share = $this->shareManager->newShare();
+			$share->setNode($node)
+				->setSharedBy($memberUid)
+				->setPermissions(\OCP\Constants::PERMISSION_READ);
+			if ($ownerLocal) {
+				$share->setShareType(IShare::TYPE_USER)->setSharedWith($owner);
+			} else {
+				if ($masterHost === '') {
+					return; // standalone install without sharding — same-node only
+				}
+				$share->setShareType(IShare::TYPE_REMOTE)->setSharedWith($remoteWith);
+			}
+			$created = $this->shareManager->createShare($share);
+
+			if ($ownerLocal) {
+				// Park the owner's mount at the hidden sponsored target so a large
+				// group doesn't flood "All files". (Federated mirrors get their
+				// mountpoint from the recipient silo's ShareSyncService.)
+				try {
+					$created->setTarget(self::SPONSORED_PREFIX . $gid . '~' . $memberUid);
+					$this->shareManager->moveShare($created, $owner);
+				} catch (\Throwable $e) {
+					$this->logger->warning("user_group_admin: could not park sponsored mount for {$gid}/{$memberUid}: " . $e->getMessage());
+				}
+			}
+			$this->logger->info("user_group_admin: created sponsored-folder system share {$gid}/{$memberUid} → {$owner}" . ($ownerLocal ? '' : ' (federated)'));
+		} catch (\Throwable $e) {
+			$this->logger->warning("user_group_admin: sponsored system share {$gid}/{$memberUid} failed: " . $e->getMessage());
+		}
+	}
+
+	/** Remove the member→owner system share (member left / group deleted). */
+	public function removeOwnerShare(string $memberUid, string $gid, string $owner): void {
+		$masterHost = (string)preg_replace('#^https?://#', '', rtrim($this->shardingAdapter->masterUrl(), '/'));
+		try {
+			$node = $this->rootFolder->getUserFolder($memberUid)->get(self::GRANT_DIR . '/' . $gid);
+		} catch (\Throwable) {
+			return;
+		}
+		foreach ([IShare::TYPE_USER, IShare::TYPE_REMOTE] as $type) {
+			try {
+				foreach ($this->shareManager->getSharesBy($memberUid, $type, $node, false, -1, 0) as $existing) {
+					$with = (string)$existing->getSharedWith();
+					if ($with === $owner || $with === $owner . '@' . $masterHost) {
+						$this->shareManager->deleteShare($existing);
+					}
+				}
+			} catch (\Throwable) {
+			}
+		}
+	}
+
+	/**
+	 * Is $uid homed on THIS node? Node-aware (the master's directory holds every
+	 * user, so userManager->get() is true for everyone there — use residency;
+	 * silos have no residency map — use the local account).
+	 */
+	private function isUserLocal(string $uid): bool {
+		if ($this->shardingAdapter->isMaster()) {
+			$server = $this->shardingAdapter->getUserServer($uid);
+			return $server === null || $this->shardingAdapter->isSelf($server);
+		}
+		return $this->userManager->get($uid) !== null;
 	}
 
 	/**
@@ -131,10 +250,18 @@ class GrantFolderManager {
 		if ($dataDir === '') {
 			return;
 		}
+		try {
+			$owner = $this->groupMapper->findByGid($gid)->getOwner();
+		} catch (\Throwable) {
+			$owner = '';
+		}
 		foreach ($uids as $uid) {
 			$path = $dataDir . '/' . $uid . '/files/' . self::GRANT_DIR . '/' . $gid;
 			if (!is_dir($path)) {
 				continue; // not this member's home node
+			}
+			if ($owner !== '') {
+				$this->removeOwnerShare($uid, $gid, $owner); // drop the sponsored system share first
 			}
 			$this->rrmdir($path);
 			try {

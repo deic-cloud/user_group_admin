@@ -77,18 +77,14 @@ $subPath = str_starts_with($uriPath, $prefix) ? substr($uriPath, strlen($prefix)
 $gid     = explode('/', $subPath)[0];
 
 if ($gid === '') {
-	// ── Root listing: one directory per grant group (member of, or owner of).
-	// Depth-1 lists names only; descending requests carry the gid in the URL
-	// and are handled by the per-gid tree below, so empty placeholders are fine.
+	// ── Root listing: one directory per grant group the user HAS (as a member).
+	// The folders a user SPONSORS live on /remote.php/sponsoredfolders/ — kept
+	// strictly separate (Frederik 2026-08-25). Depth-1 lists names only;
+	// descending requests carry the gid and are handled by the per-gid tree.
 	$groupMapper = \OC::$server->get(GroupMapper::class);
 	$gids = [];
 	foreach ($groupMapper->findGrantGroupsForMember($uid) as $g) {
 		$gids[$g->getGid()] = true;
-	}
-	foreach ($groupMapper->findByOwner($uid) as $g) {
-		if (!empty($g->getStorageGrant())) {
-			$gids[$g->getGid()] = true;
-		}
 	}
 	ksort($gids);
 	$children = [];
@@ -117,7 +113,9 @@ if (empty($group->getStorageGrant())) {
 }
 
 $ownerUid = $group->getOwner();
-$isOwner  = ($uid === $ownerUid);
+// The owner's member-overview branch is reached only via the LEGACY service
+// name (backcompat); the canonical owner surface is /remote.php/sponsoredfolders/.
+$isOwner  = ($uid === $ownerUid) && $service === 'user_group_admin';
 
 if (!$isOwner) {
 	$memberGroups = $groupMapper->findGrantGroupsForMember($uid);
