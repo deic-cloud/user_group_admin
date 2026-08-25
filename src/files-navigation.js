@@ -454,7 +454,7 @@ try {
 			emptyCaption:  t('user_group_admin', 'Grant folders of groups you sponsor appear here.'),
 			icon:          BinocularsSvg,
 			order:         50,
-			parent:        'shares',
+			parent:        'shareoverview', // files_sharing's Shares section (sharesViewId)
 			getContents:   getSponsoredContents,
 		}))
 	} catch (e) {
