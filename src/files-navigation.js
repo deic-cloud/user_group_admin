@@ -8,6 +8,7 @@ import { createClient } from 'webdav'
 import EyeSvg from '@mdi/svg/svg/eye.svg?raw'
 import GiftSvg from '@mdi/svg/svg/gift-outline.svg?raw'
 import FolderSvg from '@mdi/svg/svg/folder-outline.svg?raw'
+import BinocularsSvg from '@mdi/svg/svg/binoculars.svg?raw'
 
 const OCS        = '/ocs/v2.php/apps/user_group_admin/api/v1'
 const PARENT_ID  = 'uga-grants'
@@ -139,7 +140,7 @@ try {
 		default:         DefaultType.DEFAULT,
 		order:           -1,
 		enabled:         ({ nodes, view }) => {
-			if (!view?.id?.startsWith('uga-grant')) return false
+			if (!view?.id?.startsWith('uga-grant') && view?.id !== 'uga-sponsored') return false
 			if (!window.OCA?.Viewer?.mimetypes) return false
 			return nodes.length === 1
 				&& (nodes[0].permissions & Permission.READ) !== 0
@@ -212,10 +213,17 @@ let   grantGroups      = []
 function registerGroupView(group) {
 	const isOwner  = getCurrentUser()?.uid === group.owner
 	const grantRoot = '/' + GRANT_DIR + '/' + group.gid
+	// Passive transparency note for members: the sponsoring owner can view the
+	// folder's contents (via their "Sponsored folders" overview). No share row is
+	// shown for this (it's app-managed and can't be unshared) — this caption is
+	// the honest signal instead.
+	const caption = isOwner
+		? (group.description || group.gid)
+		: (group.description || group.gid) + ' — ' + t('user_group_admin', 'contents visible to the group owner')
 	Navigation.register(new View({
 		id:          `uga-grant-${group.gid}`,
 		name:        group.gid,
-		caption:     group.description || group.gid,
+		caption:     caption,
 		icon:        FolderSvg,
 		order:       0,
 		parent:      PARENT_ID,
@@ -353,6 +361,105 @@ try {
 		// standard files tree and redirect away from the grant view on reload.
 		window.OCP.Files.Router.goToRoute(null, { view: PARENT_ID }, { dir: newDir })
 	} catch (e) { /* ignore */ }
+})()
+
+// ── "Sponsored folders" — the owner's read-only overview (old binoculars) ─────
+//
+// Registered under the core Files "Shares" section, and ONLY when the user
+// actually sponsors at least one grant group (a root PROPFIND on the
+// /sponsoredfolders endpoint answers that) — no sidebar clutter for everyone
+// else. Content is served entirely by the endpoint, which resolves each
+// member's folder through the parked system-share mount → works cross-silo.
+
+const SPONSORED_ID = 'uga-sponsored'
+
+function sponsoredBase() {
+	return window.location.origin + (OC.webroot || '') + '/remote.php/sponsoredfolders'
+}
+
+function resultToSponsoredNode(node) {
+	const props = node.props ?? {}
+	const mtime = new Date(Date.parse(node.lastmod))
+	const data = {
+		id:          props.fileid ? Number(props.fileid) : 0,
+		source:      sponsoredBase() + node.filename,
+		mtime:       !isNaN(mtime.getTime()) && mtime.getTime() !== 0 ? mtime : undefined,
+		mime:        node.mime || 'application/octet-stream',
+		size:        props.size || parseInt(props.getcontentlength || '0'),
+		permissions: Permission.READ, // the overview is read-only by design
+		owner:       getCurrentUser()?.uid ?? null,
+		root:        '/',
+		attributes:  { ...node, ...props },
+	}
+	delete data.attributes.props
+	return node.type === 'file'
+		? new File(data, /remote\.php\/sponsoredfolders/)
+		: new Folder(data, /remote\.php\/sponsoredfolders/)
+}
+
+async function getSponsoredContents(path, options) {
+	const client  = createClient(sponsoredBase(), { headers: { requesttoken: OC.requestToken } })
+	const davPath = (!path || path === '/') ? '/' : path
+	const resp = await client.getDirectoryContents(davPath, {
+		details:     true,
+		includeSelf: true,
+		signal:      options?.signal,
+	})
+	const all      = resp.data
+	const rootItem = all.find(f => f.filename === davPath || f.filename === '/') ?? all[0]
+	return {
+		folder:   resultToSponsoredNode(rootItem),
+		contents: all.filter(f => f !== rootItem).map(resultToSponsoredNode),
+	}
+}
+
+// Synthetic gid/member rows carry fileid 0 → give them a default open action
+// navigating by dir (same trick as the grants view).
+try {
+	registerFileAction({
+		id:            'uga-sponsored-open',
+		displayName:   () => t('user_group_admin', 'Open'),
+		iconSvgInline: () => FolderSvg,
+		default:       DefaultType.DEFAULT,
+		order:         -10,
+		enabled:       ({ nodes, view }) => view?.id === SPONSORED_ID
+			&& nodes.length === 1
+			&& nodes[0].type === 'folder'
+			&& !nodes[0].fileid,
+		exec: async ({ nodes }) => {
+			if (window.OCP?.Files?.Router) {
+				const dir = new URLSearchParams(window.location.search).get('dir') || '/'
+				const next = (dir === '/' ? '' : dir) + '/' + nodes[0].basename
+				window.OCP.Files.Router.goToRoute(null, { view: SPONSORED_ID }, { dir: next })
+			}
+			return null
+		},
+	})
+} catch (e) {
+	console.error('[user_group_admin] Failed to register sponsored open action', e)
+}
+
+;(async () => {
+	try {
+		const client = createClient(sponsoredBase(), { headers: { requesttoken: OC.requestToken } })
+		const roots = await client.getDirectoryContents('/', { details: true })
+		if (!(roots.data ?? []).length) {
+			return // sponsors nothing — no sidebar item
+		}
+		Navigation.register(new View({
+			id:            SPONSORED_ID,
+			name:          t('user_group_admin', 'Sponsored folders'),
+			caption:       t('user_group_admin', 'Grant folders you sponsor (read-only)'),
+			emptyTitle:    t('user_group_admin', 'No sponsored folders'),
+			emptyCaption:  t('user_group_admin', 'Grant folders of groups you sponsor appear here.'),
+			icon:          BinocularsSvg,
+			order:         50,
+			parent:        'shares',
+			getContents:   getSponsoredContents,
+		}))
+	} catch (e) {
+		console.error('[user_group_admin] Failed to probe sponsored folders', e)
+	}
 })()
 
 // Load grant groups from API, refresh cache, and register any newly added groups
