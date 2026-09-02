@@ -186,6 +186,48 @@ class GroupController extends OCSController {
 
 	/** Offer ownership to a new owner (consent flow), or force it as admin ($force). */
 	#[NoAdminRequired]
+	/** Disable a member's account (owner: external members; data steward: domain members). */
+	#[NoAdminRequired]
+	public function disableMember(string $gid, string $uid): DataResponse {
+		try {
+			$this->groupService->setMemberEnabled($this->uid(), $gid, $uid, false);
+			return $this->ok(['uid' => $uid, 'enabled' => false]);
+		} catch (\Throwable $e) {
+			return $this->err($e->getMessage());
+		}
+	}
+
+	/** Re-enable a member's account (same authorisation as disable). */
+	#[NoAdminRequired]
+	public function enableMember(string $gid, string $uid): DataResponse {
+		try {
+			$this->groupService->setMemberEnabled($this->uid(), $gid, $uid, true);
+			return $this->ok(['uid' => $uid, 'enabled' => true]);
+		} catch (\Throwable $e) {
+			return $this->err($e->getMessage());
+		}
+	}
+
+	/** Is a user a member of a group? (old-service action=isMember). */
+	#[NoAdminRequired]
+	public function isMember(string $gid, string $uid): DataResponse {
+		return $this->ok(['gid' => $gid, 'uid' => $uid, 'member' => $this->groupService->isMember($gid, $uid)]);
+	}
+
+	/** Member uids as newline-separated plain text (old-service listMembers format=text). */
+	#[NoAdminRequired]
+	public function listMembersPlain(string $gid): \OCP\AppFramework\Http\DataDisplayResponse {
+		$uids = [];
+		foreach ($this->groupService->listMembers($gid) as $m) {
+			$u = $m->getUid();
+			if ($u !== '' && $u !== \OCA\UserGroupAdmin\Db\GroupMember::EXTERNAL_UID) {
+				$uids[] = $u;
+			}
+		}
+		$body = $uids === [] ? '' : implode("\n", $uids) . "\n";
+		return new \OCP\AppFramework\Http\DataDisplayResponse($body, 200, ['Content-Type' => 'text/plain; charset=utf-8']);
+	}
+
 	public function transferOwnership(string $gid, string $uid, bool $force = false): DataResponse {
 		try {
 			// Returns ['group' => array, 'warning' => ?string, 'committed' => ?string]

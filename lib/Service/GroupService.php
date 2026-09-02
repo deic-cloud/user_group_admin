@@ -218,6 +218,49 @@ class GroupService {
 	 * @return array{group: array, warning: ?string, committed: ?string}
 	 * @throws \RuntimeException on auth / validation failure
 	 */
+	/**
+	 * Disable or re-enable a member's account (old-service `action=disable`).
+	 * Disabling = NC setEnabled(false), which is enforced natively and synced
+	 * master↔silo (UserChangedListener). Authorisation mirrors the old service:
+	 *  - the GROUP OWNER may (dis)able an EXTERNAL member whose account hinges on
+	 *    this group (their accepted member row still carries an invitation_email);
+	 *  - a DATA STEWARD (domain owner) may (dis)able a member of their domain.
+	 * The group owner can never be disabled.
+	 */
+	public function setMemberEnabled(string $callerUid, string $gid, string $targetUid, bool $enabled): void {
+		$group   = $this->getGroup($gid);
+		$isOwner = $group->getOwner() === $callerUid;
+		$isSteward = $this->isDomainOwner($callerUid, $gid);
+
+		$isExternalHere = false;
+		try {
+			$row = $this->memberMapper->findByGidUid($gid, $targetUid);
+			$isExternalHere = $row->getInvitationEmail() !== '' && $row->getStatus() === GroupMember::STATUS_ACCEPTED;
+		} catch (DoesNotExistException) {
+		}
+
+		if (!(($isOwner && $isExternalHere) || $isSteward)) {
+			throw new \RuntimeException('Not authorised to change this member\'s access');
+		}
+		if ($targetUid === $group->getOwner()) {
+			throw new \RuntimeException('The group owner cannot be disabled');
+		}
+		$user = $this->userManager->get($targetUid);
+		if ($user === null) {
+			throw new \RuntimeException('User not found');
+		}
+		$user->setEnabled($enabled);
+	}
+
+	/** True if $uid is an ACCEPTED member of $gid (old-service `action=isMember`). */
+	public function isMember(string $gid, string $uid): bool {
+		try {
+			return $this->memberMapper->findByGidUid($gid, $uid)->getStatus() === GroupMember::STATUS_ACCEPTED;
+		} catch (DoesNotExistException) {
+			return false;
+		}
+	}
+
 	public function transferOwnership(string $callerUid, string $gid, string $newOwnerUid, bool $force = false): array {
 		$group         = $this->getGroup($gid);
 		$isAdmin       = $this->groupManager->isAdmin($callerUid);
