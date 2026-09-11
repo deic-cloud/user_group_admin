@@ -126,9 +126,9 @@ async function transfer(nodes, grantGroups) {
 			const shown = dest === '/' ? t('user_group_admin', 'Home') : dest.replace(/^\/\.uga_grants\//, '').replace(/^\//, '')
 			return [
 				// A button callback that does nothing just closes the picker.
-				{ label: t('user_group_admin', 'Cancel'), type: 'tertiary', callback: () => {} },
-				{ label: t('user_group_admin', 'Copy to {dest}', { dest: shown }, undefined, { escape: false }), callback: () => run('copy', dest) },
-				{ label: t('user_group_admin', 'Move to {dest}', { dest: shown }, undefined, { escape: false }), type: 'primary', callback: () => run('move', dest) },
+				{ label: t('user_group_admin', 'Cancel'), variant: 'tertiary', callback: () => {} },
+				{ label: t('user_group_admin', 'Copy to {dest}', { dest: shown }, undefined, { escape: false }), variant: 'secondary', callback: () => run('copy', dest) },
+				{ label: t('user_group_admin', 'Move to {dest}', { dest: shown }, undefined, { escape: false }), variant: 'primary', callback: () => run('move', dest) },
 			]
 		})
 		.build()
