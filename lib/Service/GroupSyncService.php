@@ -242,6 +242,10 @@ class GroupSyncService {
 				'headers'     => ['Authorization' => 'Bearer ' . $this->secret, 'Accept' => 'application/json'],
 				'form_params' => $body,
 				'verify'      => $this->verifyFor($baseUrl),
+				// Registered cluster servers are addressed by their backend IP; NC's HTTP
+				// client refuses private addresses ('violates local access rules') unless told
+				// otherwise — same as files_sharding's InterServerClient.
+				'nextcloud'   => ['allow_local_address' => true],
 				'timeout'     => 10,
 			]);
 			return true;
@@ -260,6 +264,7 @@ class GroupSyncService {
 			$response = $this->clientService->newClient()->get($url, [
 				'headers' => ['Authorization' => 'Bearer ' . $this->secret, 'Accept' => 'application/json'],
 				'verify'  => $this->verifyFor($baseUrl),
+				'nextcloud' => ['allow_local_address' => true],
 				'timeout' => 10,
 			]);
 			$data = json_decode((string)$response->getBody(), true);
