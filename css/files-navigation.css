@@ -11,10 +11,12 @@
    which reads white-on-white in the dialog footer — give it a frame and the
    main text colour. Scoped to the file picker so other tertiary buttons keep
    their look. */
-.file-picker .dialog__actions .button-vue--vue-tertiary {
+.file-picker .dialog__actions .button-vue--vue-tertiary,
+.file-picker .dialog__actions .button-vue--tertiary {
 	color: var(--color-main-text);
 	border: 1px solid var(--color-border-maxcontrast);
 }
-.file-picker .dialog__actions .button-vue--vue-tertiary:hover {
+.file-picker .dialog__actions .button-vue--vue-tertiary:hover,
+.file-picker .dialog__actions .button-vue--tertiary:hover {
 	background-color: var(--color-background-hover);
 }
