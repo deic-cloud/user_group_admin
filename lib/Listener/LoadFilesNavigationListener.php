@@ -28,5 +28,7 @@ class LoadFilesNavigationListener implements IEventListener {
 		}
 		Util::addInitScript('user_group_admin', 'files-navigation-init');
 		Util::addScript('user_group_admin', 'files-navigation', 'files');
+		// Hides the stock 'Move or copy' — replaced by this app's grant-aware one.
+		Util::addStyle('user_group_admin', 'files-navigation');
 	}
 }

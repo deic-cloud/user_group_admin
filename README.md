@@ -78,9 +78,10 @@ The grant is configured in the group's Settings tab:
 Grant folders live at `.uga_grants/{gid}/` in the member's own home storage,
 hidden from *All files* and shown as the **Grants** view. Nextcloud's stock
 *Move or copy* picker cannot reach them (or reach home from them), so the app
-adds the file action **Move or copy to grant/home…** (in *All files* and in a
-grant view): choose the destination root — *Home* or one of your grants — then a
-folder in NC's file picker, then *Copy* or *Move*. The transfer is a WebDAV
+**replaces** that action with its own **Move or copy** (the stock entry is hidden
+by `css/files-navigation.css`): with grants, first choose the destination root —
+*Home* or one of your grants — then a folder in NC's file picker, then *Copy* or
+*Move*; without grants it behaves like the stock action. The transfer is a WebDAV
 MOVE/COPY within `/remote.php/dav/files/{uid}/`; the grant ceiling is enforced
 by `GrantQuotaWrapper` (a full grant refuses with 507 before anything is
 written), and existing names are never overwritten (412 → error toast).

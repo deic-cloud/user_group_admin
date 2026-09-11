@@ -1,7 +1,9 @@
 /* global OC */
 /**
- * "Move or copy to grant/home…" — a file action that moves or copies files
- * between the user's home and their grant folders.
+ * "Move or copy" — the app's replacement for NC's stock Move-or-copy action: it
+ * also moves or copies between the user's home and their grant folders. The
+ * stock action ('move-copy') is hidden by css/files-navigation.css so users see
+ * ONE entry; without any grants this behaves exactly like the stock one.
  *
  * Grant folders live at /.uga_grants/{gid}/ inside the user's own home storage,
  * hidden from the normal Files view and shown as the "Grants" view instead. NC's
@@ -75,7 +77,7 @@ async function transfer(nodes, grantGroups) {
 	for (const g of grantGroups) {
 		roots.push({ label: t('user_group_admin', 'Grant: {group}', { group: g.gid }), path: '/' + GRANT_DIR + '/' + g.gid })
 	}
-	const root = await chooseRoot(roots)
+	const root = roots.length === 1 ? roots[0] : await chooseRoot(roots)
 	if (!root) return
 
 	const run = async (op, dest) => {
@@ -128,10 +130,27 @@ async function transfer(nodes, grantGroups) {
 			]
 		})
 		.build()
+	// The picker's breadcrumb prints raw path segments; show the grants dotfolder
+	// under its UI name while the dialog is open.
+	const relabel = () => {
+		document.querySelectorAll('.file-picker, .file-picker__breadcrumbs, [class*="file-picker"]').forEach((el) => {
+			const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+			let n
+			while ((n = walker.nextNode())) {
+				if (n.nodeValue && n.nodeValue.trim() === GRANT_DIR) {
+					n.nodeValue = n.nodeValue.replace(GRANT_DIR, t('user_group_admin', 'Grants'))
+				}
+			}
+		})
+	}
+	const observer = new MutationObserver(relabel)
+	observer.observe(document.body, { childList: true, subtree: true, characterData: true })
 	try {
 		await picker.pick()
 	} catch (e) {
 		// closed without choosing
+	} finally {
+		observer.disconnect()
 	}
 }
 
@@ -141,15 +160,16 @@ async function transfer(nodes, grantGroups) {
 export function registerGrantTransferAction(getGrantGroups) {
 	registerFileAction({
 		id:            'uga-transfer',
-		displayName:   () => t('user_group_admin', 'Move or copy to grant/home…'),
+		displayName:   () => t('user_group_admin', 'Move or copy'),
 		iconSvgInline: () => MoveSvg,
-		order:         16, // right after NC's own "Move or copy"
+		order:         15, // where NC's own (hidden) "Move or copy" sits
 		enabled: ({ nodes, view }) => {
-			if (!nodes.length || !getGrantGroups().length) return false
+			if (!nodes.length) return false
 			const vid = view?.id ?? ''
-			// Home ("files") and the member's own grant views; not the owner's
-			// read-only Sponsored folders, not the synthetic group list (fileid 0).
-			if (!(vid === 'files' || vid.startsWith('uga-grant-'))) return false
+			// Everywhere the stock action worked (home, favorites, recent, shares,
+			// the member's grant views) — but not the owner's read-only Sponsored
+			// folders and not the synthetic group list (fileid 0).
+			if (vid === 'uga-sponsored' || vid === 'uga-grants') return false
 			return nodes.every((n) => n.fileid && (n.permissions & Permission.READ) !== 0)
 		},
 		exec: async ({ nodes }) => {

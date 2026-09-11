@@ -1,0 +1,8 @@
+/* Files app: hide NC's stock "Move or copy" (action id 'move-copy') in the row
+   menu and the selection toolbar — user_group_admin registers its own
+   "Move or copy" (uga-transfer) that additionally reaches the grant folders, so
+   users get ONE entry. Loaded with the files-navigation script. */
+[data-cy-files-list-row-action="move-copy"],
+[data-cy-files-list-selection-action="move-copy"] {
+	display: none !important;
+}
