@@ -166,10 +166,12 @@ export function registerGrantTransferAction(getGrantGroups) {
 		enabled: ({ nodes, view }) => {
 			if (!nodes.length) return false
 			const vid = view?.id ?? ''
-			// Everywhere the stock action worked (home, favorites, recent, shares,
-			// the member's grant views) — but not the owner's read-only Sponsored
-			// folders and not the synthetic group list (fileid 0).
-			if (vid === 'uga-sponsored' || vid === 'uga-grants') return false
+			// Everywhere the stock action worked (home, favorites, recent, shares)
+			// and inside grants — which the Files router shows under the PARENT
+			// 'uga-grants' view with dir /{gid}/…; its top-level synthetic group
+			// entries (fileid 0) fail the fileid test below. Not the owner's
+			// read-only Sponsored folders.
+			if (vid === 'uga-sponsored') return false
 			return nodes.every((n) => n.fileid && (n.permissions & Permission.READ) !== 0)
 		},
 		exec: async ({ nodes }) => {
