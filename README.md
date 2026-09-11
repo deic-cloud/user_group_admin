@@ -73,6 +73,18 @@ The grant is configured in the group's Settings tab:
 - **`storage_grant`** — the *per-member* allocation: each member's grant subfolder (`.uga_grants/{gid}/`) is capped at this, independent of their personal quota.
 - **`storage_grant_total`** — the *committed pool*: the owner's total commitment across the whole group. A member's grant free space is `min(per-member remaining, pool remaining)`, where pool usage aggregates every accepted member's recorded `storage_used` (refreshed daily by the `GrantFolderUsage` job) plus the current member's live usage. Unset (`0`) → no pool cap, per-member behaviour only (no regression). Because the aggregate is day-granular and a silo may not hold every member's row, the pool cap is a conservative backstop against over-commitment, not a to-the-byte guarantee — it never *falsely* blocks.
 
+### Moving files between home and grant folders
+
+Grant folders live at `.uga_grants/{gid}/` in the member's own home storage,
+hidden from *All files* and shown as the **Grants** view. Nextcloud's stock
+*Move or copy* picker cannot reach them (or reach home from them), so the app
+adds the file action **Move or copy to grant/home…** (in *All files* and in a
+grant view): choose the destination root — *Home* or one of your grants — then a
+folder in NC's file picker, then *Copy* or *Move*. The transfer is a WebDAV
+MOVE/COPY within `/remote.php/dav/files/{uid}/`; the grant ceiling is enforced
+by `GrantQuotaWrapper` (a full grant refuses with 507 before anything is
+written), and existing names are never overwritten (412 → error toast).
+
 ### Home-directory top-up (self-service)
 
 Separately from the grant *folder*, a group owner can allocate extra free quota on their members' **own home directories**, drawn from their own assigned quota — the "OneDrive alternative" option. It's set from the same group **Settings** tab ("Home-directory top-up", e.g. `100 GB`, empty to remove) and is stored/enforced by `files_accounting` (`files_accounting_topup`), which raises each member's effective free quota (and native hard-stop). The control calls the `files_accounting` `grouptopup` OCS endpoint, which authorises the **group owner** (not just admins); on a silo the write is forwarded to the master. Hidden gracefully if `files_accounting` is not installed.

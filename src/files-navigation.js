@@ -9,6 +9,7 @@ import EyeSvg from '@mdi/svg/svg/eye.svg?raw'
 import GiftSvg from '@mdi/svg/svg/gift-outline.svg?raw'
 import FolderSvg from '@mdi/svg/svg/folder-outline.svg?raw'
 import BinocularsSvg from '@mdi/svg/svg/binoculars.svg?raw'
+import { registerGrantTransferAction } from './grant-transfer.js'
 
 const OCS        = '/ocs/v2.php/apps/user_group_admin/api/v1'
 const PARENT_ID  = 'uga-grants'
@@ -209,6 +210,13 @@ try {
 const Navigation       = getNavigation()
 const GROUPS_CACHE_KEY = 'uga_grant_groups_v1'
 let   grantGroups      = []
+
+// "Move or copy to grant/home…" (see grant-transfer.js) — reads the live grant list.
+try {
+	registerGrantTransferAction(() => grantGroups)
+} catch (e) {
+	console.error('[user_group_admin] Failed to register grant transfer action', e)
+}
 
 function registerGroupView(group) {
 	// The Grants view is the MEMBER surface — always the user's own folder.
