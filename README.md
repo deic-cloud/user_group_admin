@@ -73,6 +73,16 @@ The grant is configured in the group's Settings tab:
 - **`storage_grant`** — the *per-member* allocation: each member's grant subfolder (`.uga_grants/{gid}/`) is capped at this, independent of their personal quota.
 - **`storage_grant_total`** — the *committed pool*: the owner's total commitment across the whole group. A member's grant free space is `min(per-member remaining, pool remaining)`, where pool usage aggregates every accepted member's recorded `storage_used` (refreshed daily by the `GrantFolderUsage` job) plus the current member's live usage. Unset (`0`) → no pool cap, per-member behaviour only (no regression). Because the aggregate is day-granular and a silo may not hold every member's row, the pool cap is a conservative backstop against over-commitment, not a to-the-byte guarantee — it never *falsely* blocks.
 
+### WebDAV endpoint for grant folders
+
+Grant folders are concealed from the standard WebDAV tree (and thus from sync
+clients); their WebDAV surface is **`/remote.php/grants/`** — root PROPFIND lists
+the user's grant groups, `/remote.php/grants/{gid}/` is the member's folder
+(read-write, quota enforced) or, for the sponsoring owner, the read-only overview
+of members' folders. Deployments usually add a pretty rewrite `/grants/ →
+/remote.php/grants/`. The earlier names `/remote.php/grantfolders/` and the
+legacy `/remote.php/user_group_admin/` still resolve to the same endpoint.
+
 ### Moving files between home and grant folders
 
 Grant folders live at `.uga_grants/{gid}/` in the member's own home storage,

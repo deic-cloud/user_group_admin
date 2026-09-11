@@ -3,26 +3,27 @@
 declare(strict_types=1);
 
 /**
- * Grant-folder DAV endpoint: /remote.php/grantfolders/ (canonical; the legacy
+ * Grant-folder DAV endpoint: /remote.php/grants/ (canonical; the earlier
+ * /remote.php/grantfolders/ and the legacy
  * /remote.php/user_group_admin/ service name still resolves here).
  *
- * Root listing:  PROPFIND /remote.php/grantfolders/
+ * Root listing:  PROPFIND /remote.php/grants/
  *   → one directory per grant group the user is an accepted member of or owns
  *     (old-service docs model, term now GRANT folders — NOT shared with the
  *     group; only, optionally, visible to the owner).
  *
- * Member access: any WebDAV method on /remote.php/grantfolders/{gid}/
+ * Member access: any WebDAV method on /remote.php/grants/{gid}/
  *   → serves {datadirectory}/{memberUid}/files/.uga_grants/{gid}/
  *     (read-write; quota enforced by GrantPropertiesPlugin)
  *
- * Owner access:  any WebDAV method on /remote.php/grantfolders/{gid}/
+ * Owner access:  any WebDAV method on /remote.php/grants/{gid}/
  *   → a virtual directory listing all accepted members' grant folders
  *     (the "binoculars" view), one subdirectory per member uid.
  *
  * Grant folders are concealed from the DEFAULT WebDAV surface (files_sharding
  * conceal gate) and from sync clients; this endpoint is the WebDAV surface.
  * Space is accounted to the group owner via files_accounting. On production
- * the pretty URL /grantfolders/ is an Apache rewrite (mfsbsd
+ * the pretty URL /grants/ is an Apache rewrite (mfsbsd
  * nc_htaccess_custom.conf) onto this endpoint.
  */
 
@@ -68,8 +69,8 @@ $uid = $userSession->getUser()->getUID();
 
 $requestUri = $_SERVER['REQUEST_URI'] ?? '';
 $uriPath    = strtok($requestUri, '?') ?: '';
-$service    = 'grantfolders';
-if (preg_match('#^/remote\.php/(grantfolders|user_group_admin)(/|$)#', $uriPath, $m)) {
+$service    = 'grants';
+if (preg_match('#^/remote\.php/(grants|grantfolders|user_group_admin)(/|$)#', $uriPath, $m)) {
 	$service = $m[1];
 }
 $prefix  = '/remote.php/' . $service . '/';

@@ -26,7 +26,7 @@ try {
 }
 
 function grantBaseUrl(gid) {
-	return window.location.origin + (OC.webroot || '') + '/remote.php/user_group_admin/' + gid
+	return window.location.origin + (OC.webroot || '') + '/remote.php/grants/' + gid
 }
 
 function memberDavBase(gid) {

@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  * The GROUP OWNER's read-only overview of the grant folders they sponsor (the
  * old service's "binoculars" view) — deliberately separate from
- * /remote.php/grantfolders/, which shows the grant folders a user HAS as a
+ * /remote.php/grants/, which shows the grant folders a user HAS as a
  * member.
  *
  *   PROPFIND /sponsoredfolders/                 → one dir per sponsored group

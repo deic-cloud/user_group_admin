@@ -27,6 +27,7 @@
 	<remote>
 		<groupadmin>appinfo/remote.php</groupadmin>
 		<user_group_admin>appinfo/grants.php</user_group_admin>
+		<grants>appinfo/grants.php</grants>
 		<grantfolders>appinfo/grants.php</grantfolders>
 		<sponsoredfolders>appinfo/sponsored.php</sponsoredfolders>
 	</remote>
