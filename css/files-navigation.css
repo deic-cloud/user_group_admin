@@ -6,3 +6,15 @@
 [data-cy-files-list-selection-action="move-copy"] {
 	display: none !important;
 }
+
+/* Our Move-or-copy picker: the Cancel button is tertiary (text-only by design),
+   which reads white-on-white in the dialog footer — give it a frame and the
+   main text colour. Scoped to the file picker so other tertiary buttons keep
+   their look. */
+.file-picker .dialog__actions .button-vue--vue-tertiary {
+	color: var(--color-main-text);
+	border: 1px solid var(--color-border-maxcontrast);
+}
+.file-picker .dialog__actions .button-vue--vue-tertiary:hover {
+	background-color: var(--color-background-hover);
+}
