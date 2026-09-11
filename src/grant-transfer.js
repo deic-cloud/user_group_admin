@@ -125,6 +125,8 @@ async function transfer(nodes, grantGroups) {
 			const dest = (selected.length === 1 && selected[0].type === 'folder') ? selected[0].path : currentPath
 			const shown = dest === '/' ? t('user_group_admin', 'Home') : dest.replace(/^\/\.uga_grants\//, '').replace(/^\//, '')
 			return [
+				// A button callback that does nothing just closes the picker.
+				{ label: t('user_group_admin', 'Cancel'), type: 'tertiary', callback: () => {} },
 				{ label: t('user_group_admin', 'Copy to {dest}', { dest: shown }, undefined, { escape: false }), callback: () => run('copy', dest) },
 				{ label: t('user_group_admin', 'Move to {dest}', { dest: shown }, undefined, { escape: false }), type: 'primary', callback: () => run('move', dest) },
 			]
