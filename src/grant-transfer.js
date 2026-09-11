@@ -75,7 +75,7 @@ function chooseRoot(roots) {
 async function transfer(nodes, grantGroups) {
 	const roots = [{ label: t('user_group_admin', 'Home'), path: '/' }]
 	for (const g of grantGroups) {
-		roots.push({ label: t('user_group_admin', 'Grant: {group}', { group: g.gid }), path: '/' + GRANT_DIR + '/' + g.gid })
+		roots.push({ label: t('user_group_admin', 'Grant: {group}', { group: g.gid }, undefined, { escape: false }), path: '/' + GRANT_DIR + '/' + g.gid })
 	}
 	const root = roots.length === 1 ? roots[0] : await chooseRoot(roots)
 	if (!root) return
@@ -102,20 +102,20 @@ async function transfer(nodes, grantGroups) {
 			} catch (e) {
 				const status = e?.status ?? e?.response?.status
 				showError(status === 412
-					? t('user_group_admin', '"{name}" already exists in the destination', { name: node.basename })
+					? t('user_group_admin', '"{name}" already exists in the destination', { name: node.basename }, undefined, { escape: false })
 					: status === 507
-						? t('user_group_admin', 'Not enough space in the destination grant for "{name}"', { name: node.basename })
-						: t('user_group_admin', 'Could not {op} "{name}"', { op: op === 'move' ? t('user_group_admin', 'move') : t('user_group_admin', 'copy'), name: node.basename }))
+						? t('user_group_admin', 'Not enough space in the destination grant for "{name}"', { name: node.basename }, undefined, { escape: false })
+						: t('user_group_admin', 'Could not {op} "{name}"', { op: op === 'move' ? t('user_group_admin', 'move') : t('user_group_admin', 'copy'), name: node.basename }, undefined, { escape: false }))
 			}
 		}
 		if (done > 0) {
 			showSuccess(op === 'move'
-				? t('user_group_admin', 'Moved {n} item(s) to {dest}', { n: done, dest: root.label })
-				: t('user_group_admin', 'Copied {n} item(s) to {dest}', { n: done, dest: root.label }))
+				? t('user_group_admin', 'Moved {n} item(s) to {dest}', { n: done, dest: root.label }, undefined, { escape: false })
+				: t('user_group_admin', 'Copied {n} item(s) to {dest}', { n: done, dest: root.label }, undefined, { escape: false }))
 		}
 	}
 
-	const picker = getFilePickerBuilder(t('user_group_admin', 'Destination in {root}', { root: root.label }))
+	const picker = getFilePickerBuilder(t('user_group_admin', 'Destination in {root}', { root: root.label }, undefined, { escape: false }))
 		.allowDirectories(true)
 		.setMultiSelect(false)
 		.startAt(root.path)
@@ -123,10 +123,10 @@ async function transfer(nodes, grantGroups) {
 		.setFilter((node) => node.type === 'folder' && !(node.basename === GRANT_DIR))
 		.setButtonFactory((selected, currentPath) => {
 			const dest = (selected.length === 1 && selected[0].type === 'folder') ? selected[0].path : currentPath
-			const shown = dest === '/' ? t('user_group_admin', 'Home') : dest.replace(/^\/\.uga_grants\//, '')
+			const shown = dest === '/' ? t('user_group_admin', 'Home') : dest.replace(/^\/\.uga_grants\//, '').replace(/^\//, '')
 			return [
-				{ label: t('user_group_admin', 'Copy to {dest}', { dest: shown }), callback: () => run('copy', dest) },
-				{ label: t('user_group_admin', 'Move to {dest}', { dest: shown }), type: 'primary', callback: () => run('move', dest) },
+				{ label: t('user_group_admin', 'Copy to {dest}', { dest: shown }, undefined, { escape: false }), callback: () => run('copy', dest) },
+				{ label: t('user_group_admin', 'Move to {dest}', { dest: shown }, undefined, { escape: false }), type: 'primary', callback: () => run('move', dest) },
 			]
 		})
 		.build()
