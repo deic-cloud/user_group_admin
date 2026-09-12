@@ -10,6 +10,9 @@ use OCA\FilesSharding\Service\ShardingService;
 /** Thin wrapper around ShardingService when files_sharding is installed. */
 class FilesShardingAdapter implements IShardingAdapter {
 	private const GRANT_FOLDER = '/.uga_grants';
+	// Grant parent name during a short-lived rename (ce3b53c, reverted); rules
+	// written under it are dead and are removed on every provisioning pass.
+	private const LEGACY_GRANT_FOLDER = '/Grants';
 	private const LOCKED_BY    = 'user_group_admin';
 
 	public function __construct(
@@ -27,6 +30,7 @@ class FilesShardingAdapter implements IShardingAdapter {
 	public function setUserServer(string $uid, int $serverId): void { $this->service->setUserServer($uid, $serverId); }
 
 	public function setGrantSyncHide(string $uid, bool $hide): void {
+		$this->folderMapper->deleteLockedRule($uid, self::LEGACY_GRANT_FOLDER, self::LOCKED_BY);
 		if ($hide) {
 			$this->folderMapper->upsertLockedRule($uid, self::GRANT_FOLDER, true, self::LOCKED_BY);
 		} else {
