@@ -22,6 +22,15 @@ use OCP\Notification\IManager as INotificationManager;
 use Psr\Log\LoggerInterface;
 
 class InvitationService {
+	/**
+	 * Minimum length of an account password: the password_policy app's setting
+	 * (Administration → Security), default 10 — the same rule every other
+	 * account password on the service follows (core validates on createUser too).
+	 */
+	public function minPasswordLength(): int {
+		return max(1, (int)$this->config->getAppValue('password_policy', 'minLength', '10'));
+	}
+
 	public function __construct(
 		private GroupMapper          $groupMapper,
 		private GroupMemberMapper    $memberMapper,
@@ -112,8 +121,9 @@ class InvitationService {
 			throw new \RuntimeException('Invitation data is incomplete');
 		}
 
-		if (strlen($password) < 10) {
-			throw new \RuntimeException('Password must be at least 10 characters');
+		$min = $this->minPasswordLength();
+		if (strlen($password) < $min) {
+			throw new \RuntimeException(sprintf('Password must be at least %d characters', $min));
 		}
 
 		// Never create a second account for an email that already has one — the

@@ -22,7 +22,7 @@
 		<div class="uga-signup-field">
 			<label for="password"><?php p($l->t('Password')) ?></label>
 			<input type="password" id="password" name="password" required autocomplete="new-password"
-			       minlength="10" placeholder="<?php p($l->t('At least 10 characters')) ?>"
+			       minlength="<?php p((string)($_['min_password_length'] ?? 10)) ?>" placeholder="<?php p($l->t('At least %d characters', [(int)($_['min_password_length'] ?? 10)])) ?>"
 			       class="uga-signup-input">
 		</div>
 

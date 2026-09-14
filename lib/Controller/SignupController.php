@@ -65,6 +65,7 @@ class SignupController extends Controller {
 			'email' => $info['email'],
 			'gid'   => $info['gid'],
 			'owner' => $info['owner'] ?? '',
+			'min_password_length' => $this->invitationService->minPasswordLength(),
 		], 'guest');
 	}
 
@@ -127,6 +128,7 @@ class SignupController extends Controller {
 					'gid'   => $info['gid'] ?? '',
 					'owner' => $info['owner'] ?? '',
 					'error' => $e->getMessage(),
+					'min_password_length' => $this->invitationService->minPasswordLength(),
 				],
 				'guest',
 			);
