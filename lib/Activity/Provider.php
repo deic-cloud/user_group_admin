@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\UserGroupAdmin\Activity;
 
+use OCP\Activity\Exceptions\UnknownActivityException;
 use OCP\Activity\IEvent;
 use OCP\Activity\IProvider;
 use OCP\IL10N;
@@ -14,7 +15,7 @@ class Provider implements IProvider {
 
 	public function parse($language, IEvent $event, ?IEvent $previousEvent = null): IEvent {
 		if ($event->getApp() !== 'user_group_admin') {
-			throw new \InvalidArgumentException('Wrong app');
+			throw new UnknownActivityException('Wrong app');
 		}
 
 		$l = $this->l10nFactory->get('user_group_admin', $language);
@@ -40,7 +41,7 @@ class Provider implements IProvider {
 			'ownership_declined'       => $l->t('%s declined ownership of group "%s"',        [$p['uid'], $p['gid']]),
 			'ownership_transferred'      => $l->t('You are now the owner of group "%s"',      [$p['gid']]),
 			'ownership_transferred_from' => $l->t('Ownership of group "%s" was transferred to %s', [$p['gid'], $p['uid']]),
-			default           => throw new \InvalidArgumentException('Unknown subject'),
+			default           => throw new UnknownActivityException('Unknown subject'),
 		});
 
 		$event->setIcon(\OCP\Server::get(\OCP\IURLGenerator::class)->imagePath('user_group_admin', 'nav-icon.svg'));
