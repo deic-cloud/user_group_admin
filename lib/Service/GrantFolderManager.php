@@ -235,7 +235,14 @@ class GrantFolderManager {
 			$server = $this->shardingAdapter->getUserServer($uid);
 			return $server === null || $this->shardingAdapter->isSelf($server);
 		}
-		return $this->userManager->get($uid) !== null;
+		// STRICT: the account must exist here under exactly this name. Nextcloud's
+		// database backend falls back to matching e-mail addresses when a name is
+		// not found, so on silo8 get('fror@dtu.dk') returns the fror@deic.dk
+		// account, whose address is fror@dtu.dk. Trusting that made the sponsor
+		// share a LOCAL share to "fror@dtu.dk" — which resolves to the member
+		// himself — instead of a cluster share to the real owner on the master.
+		$user = $this->userManager->get($uid);
+		return $user !== null && strcasecmp($user->getUID(), $uid) === 0;
 	}
 
 	/**
