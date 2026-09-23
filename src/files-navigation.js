@@ -30,13 +30,30 @@ function grantBaseUrl(gid) {
 }
 
 function memberDavBase(gid) {
-	// Standard NC DAV path for the current user's grant folder.
-	// Using this as the file source keeps chunked uploads inside /remote.php/dav/
-	// so NC's QuotaPlugin can validate the Destination header without throwing.
+	// Standard NC DAV path for the current user's grant folder, ENCODED: this is
+	// the base URL handed to the WebDAV client, which requests it as it is.
 	const uid = getCurrentUser()?.uid ?? ''
 	return window.location.origin + (OC.webroot || '')
 		+ '/remote.php/dav/files/' + encodeURIComponent(uid)
 		+ '/' + GRANT_DIR + '/' + encodeURIComponent(gid)
+}
+
+/**
+ * The same location as a node SOURCE, which must be written the way Nextcloud's
+ * own Files view writes it: account and group names RAW. The files library
+ * refuses any node whose root ('/files/<uid>') does not appear literally in its
+ * source ("Root must be part of the source"), so an encoded '@' in an e-mail
+ * account name broke every grant folder on the real service while the pods'
+ * plain test names (alice, bob) never showed it. A raw group name also keeps
+ * node.path free of %20s, which getGrantContents parses the group id back out of.
+ * Keeping member nodes on /remote.php/dav/ keeps chunked uploads inside the DAV
+ * tree, so NC's QuotaPlugin can check the Destination header.
+ */
+function memberSourceBase(gid) {
+	const uid = getCurrentUser()?.uid ?? ''
+	return window.location.origin + (OC.webroot || '')
+		+ '/remote.php/dav/files/' + uid
+		+ '/' + GRANT_DIR + '/' + gid
 }
 
 /**
@@ -53,7 +70,7 @@ function memberDavBase(gid) {
  * the parent 'uga-grants' view where getContents parses /{gid} from path[0].
  */
 function resultToGrantNode(node, base, gid, isOwner) {
-	const fileBase   = isOwner ? base : memberDavBase(gid)
+	const fileBase   = isOwner ? base : memberSourceBase(gid)
 	const davService = isOwner
 		? /remote\.php\/user_group_admin\//
 		: /remote\.php\/(web)?dav/
@@ -153,9 +170,12 @@ try {
 			// node.path with root='/' returns /files/{uid}/... (the full path after
 			// the DAV service marker), but the viewer expects a path relative to
 			// /remote.php/dav/files/{uid}/ so it can list siblings via standard DAV.
+			// Compare DECODED paths: URL().pathname percent-encodes some characters
+			// (a space in a group name) and not others (an '@' in an account name).
 			const uid       = getCurrentUser()?.uid ?? ''
-			const davPrefix = '/remote.php/dav/files/' + encodeURIComponent(uid)
-			const srcPath   = new URL(node.source).pathname
+			const davPrefix = '/remote.php/dav/files/' + uid
+			let srcPath = new URL(node.source).pathname
+			try { srcPath = decodeURIComponent(srcPath) } catch (e) { /* keep as is */ }
 			const filename  = srcPath.includes(davPrefix)
 				? srcPath.slice(srcPath.indexOf(davPrefix) + davPrefix.length) || '/'
 				: node.path || '/'
