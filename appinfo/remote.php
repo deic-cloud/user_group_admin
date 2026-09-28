@@ -39,14 +39,26 @@ if ($userSession->getUser() === null) {
 	}
 }
 
-if ($userSession->getUser() === null) {
+// isMember from the trusted infra net (system config 'trustednet', e.g. "10.0.")
+// needs no login: the container service asks it, with no user of its own, to
+// let the members of a group run a container restricted to that group. It only
+// answers yes or no; everything else still requires a login.
+$fromTrustedNet = false;
+$remoteIp = \OC::$server->get(\OCP\IRequest::class)->getRemoteAddress();
+foreach (preg_split('/\s+/', trim((string)\OC::$server->get(\OCP\IConfig::class)->getSystemValue('trustednet', ''))) ?: [] as $net) {
+	if ($net !== '' && !str_starts_with($net, 'TRUSTED_') && str_starts_with($remoteIp, $net)) {
+		$fromTrustedNet = true;
+	}
+}
+
+if ($userSession->getUser() === null && !(($_GET['action'] ?? '') === 'isMember' && $fromTrustedNet)) {
 	header('WWW-Authenticate: Basic realm="Nextcloud"');
 	http_response_code(401);
 	echo json_encode(['status' => 'error', 'message' => 'Authentication required']);
 	exit;
 }
 
-$currentUid = $userSession->getUser()->getUID();
+$currentUid = $userSession->getUser()?->getUID() ?? '';
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
