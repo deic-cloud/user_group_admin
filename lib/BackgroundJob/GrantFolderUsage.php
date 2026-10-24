@@ -20,9 +20,10 @@ use Psr\Log\LoggerInterface;
  * Daily job that recalculates grant folder sizes and reports them to files_accounting.
  *
  * For each group with a storage_grant, iterates over accepted members, measures
- * their {datadirectory}/{uid}/files/.uga_grants/{gid}/ directory size, and calls
- * FilesAccounting\Service\StorageService::updateMemberUsage() +
+ * their {datadirectory}/{uid}/files/.uga_grants/{gid}/ directory size into
+ * uga_group_members.storage_used (synced to all peers), and on the master calls
  * FilesAccounting\Service\StorageService::logGrantUsage() so billing is accurate.
+ * storage_used is grant-folder usage only; nothing else writes it.
  */
 class GrantFolderUsage extends TimedJob {
 	public function __construct(
@@ -75,6 +76,16 @@ class GrantFolderUsage extends TimedJob {
 				// silo fix: each member is measured exactly once, on their home node.
 				if (!is_dir($path)) {
 					continue;
+				}
+				// On the master, which knows the assignments, a member assigned to another
+				// node is measured there only: a folder left here when they moved (e.g. a
+				// migration that placed them elsewhere) would otherwise push 0 over their
+				// real usage.
+				if ($isMaster) {
+					$home = $this->shardingService->getUserServer($uid);
+					if ($home !== null && !$this->shardingService->isSelf($home)) {
+						continue;
+					}
 				}
 				$size = $this->dirSize($path);
 				// Record locally + propagate to every peer so the per-node pool cap
