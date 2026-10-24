@@ -8,7 +8,6 @@ use OCA\DAV\Events\SabrePluginAddEvent;
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\UserGroupAdmin\Activity\Provider as ActivityProvider;
 use OCA\UserGroupAdmin\Activity\Setting as ActivitySetting;
-use OCA\UserGroupAdmin\BackgroundJob\GrantFolderUsage;
 use OCA\UserGroupAdmin\Group\GroupBackend;
 use OCA\UserGroupAdmin\Listener\EnsureDomainGroupListener;
 use OCA\UserGroupAdmin\Listener\EnsureGrantFoldersListener;
@@ -53,9 +52,6 @@ class Application extends App implements IBootstrap {
 		$context->registerEventListener(SabrePluginAddEvent::class, GrantFolderSabreListener::class);
 		$context->registerEventListener(BeforeFileSystemSetupEvent::class, GrantQuotaWrapperListener::class);
 
-		try {
-			$context->registerBackgroundJob(GrantFolderUsage::class);
-		} catch (\Throwable) {}
 		try {
 			$context->registerNotifierService(Notifier::class);
 		} catch (\Throwable) {}
