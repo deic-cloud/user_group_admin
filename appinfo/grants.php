@@ -75,7 +75,10 @@ if (preg_match('#^/remote\.php/(grants|grantfolders|user_group_admin)(/|$)#', $u
 }
 $prefix  = '/remote.php/' . $service . '/';
 $subPath = str_starts_with($uriPath, $prefix) ? substr($uriPath, strlen($prefix)) : '';
-$gid     = explode('/', $subPath)[0];
+// The gid arrives URL-encoded ("Large%20AAU%20files"): decode it for the lookups,
+// keep the request's own encoding for the DAV base URI Sabre matches against.
+$gidRaw  = explode('/', $subPath)[0];
+$gid     = rawurldecode($gidRaw);
 
 if ($gid === '') {
 	// ── Root listing: one directory per grant group the user HAS (as a member).
@@ -181,7 +184,7 @@ if (!$isOwner) {
 
 // ── Build Sabre DAV tree ──────────────────────────────────────────────────────
 
-$baseUri = $prefix . $gid . '/'; // $prefix carries the requested service name
+$baseUri = $prefix . $gidRaw . '/'; // $prefix carries the requested service name
 
 if ($isOwner) {
 	$children = [];

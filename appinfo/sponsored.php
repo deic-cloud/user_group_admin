@@ -63,7 +63,9 @@ $uid = $userSession->getUser()->getUID();
 $prefix  = '/remote.php/sponsoredfolders/';
 $uriPath = strtok($_SERVER['REQUEST_URI'] ?? '', '?') ?: '';
 $subPath = str_starts_with($uriPath, $prefix) ? substr($uriPath, strlen($prefix)) : '';
-$gid     = explode('/', $subPath)[0];
+// URL-encoded gid ("Large%20AAU%20files"): decoded for lookups, as received for the DAV base URI.
+$gidRaw  = explode('/', $subPath)[0];
+$gid     = rawurldecode($gidRaw);
 
 $groupMapper = \OC::$server->get(GroupMapper::class);
 
@@ -123,7 +125,7 @@ foreach ($memberMapper->findByGid($gid, GroupMember::STATUS_ACCEPTED) as $m) {
 }
 
 $server = new Server(new SimpleCollection($gid, $children));
-$server->setBaseUri($prefix . $gid . '/');
+$server->setBaseUri($prefix . $gidRaw . '/');
 $server->addPlugin(new \Sabre\DAV\Locks\Plugin(
 	new \Sabre\DAV\Locks\Backend\File(sys_get_temp_dir() . '/nc_uga_dav_locks')
 ));
