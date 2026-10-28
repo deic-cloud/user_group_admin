@@ -184,8 +184,6 @@ class GroupController extends OCSController {
 
 	// ── Ownership transfer ──────────────────────────────────────────────────────
 
-	/** Offer ownership to a new owner (consent flow), or force it as admin ($force). */
-	#[NoAdminRequired]
 	/** Disable a member's account (owner: external members; data steward: domain members). */
 	#[NoAdminRequired]
 	public function disableMember(string $gid, string $uid): DataResponse {
@@ -228,6 +226,8 @@ class GroupController extends OCSController {
 		return new \OCP\AppFramework\Http\DataDisplayResponse($body, 200, ['Content-Type' => 'text/plain; charset=utf-8']);
 	}
 
+	/** Offer ownership to a new owner (consent flow), or force it as admin ($force). */
+	#[NoAdminRequired]
 	public function transferOwnership(string $gid, string $uid, bool $force = false): DataResponse {
 		try {
 			// Returns ['group' => array, 'warning' => ?string, 'committed' => ?string]
