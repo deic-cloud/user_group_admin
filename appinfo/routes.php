@@ -13,6 +13,7 @@ return [
 		['name' => 'signup#submitForm',     'url' => '/signup/create',  'verb' => 'POST'],
 		['name' => 'signup#decline',        'url' => '/signup/decline', 'verb' => 'GET'],
 		['name' => 'signup#acceptAsUser',   'url' => '/signup/accept',  'verb' => 'GET'],
+		['name' => 'signup#acceptAsUserConfirmed', 'url' => '/signup/accept', 'verb' => 'POST'],
 
 		// Internal silo-sync endpoints (shared secret, no NC session)
 		['name' => 'internal#syncGroup',    'url' => '/internal/groups/sync',                              'verb' => 'POST'],

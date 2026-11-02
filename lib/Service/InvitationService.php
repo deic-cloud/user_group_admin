@@ -9,6 +9,7 @@ use OCA\UserGroupAdmin\Db\Group;
 use OCA\UserGroupAdmin\Db\GroupMapper;
 use OCA\UserGroupAdmin\Db\GroupMember;
 use OCA\UserGroupAdmin\Db\GroupMemberMapper;
+use OCA\UserGroupAdmin\Exception\InviteAddressMismatchException;
 use OCP\Accounts\IAccountManager;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IConfig;
@@ -258,7 +259,14 @@ class InvitationService {
 	 * email MUST match the invitation — only the invited person may accept.
 	 * @throws \RuntimeException
 	 */
-	public function acceptAsExistingUser(string $acceptToken, string $loggedInUid): string {
+	/**
+	 * Accept an e-mail invitation as the logged-in user. The invitation may have
+	 * gone to another of the user's addresses (people have several, ending in one
+	 * mailbox): then InviteAddressMismatchException is thrown, and the caller asks
+	 * for confirmation and calls again with $confirmedOtherAddress = true. The link
+	 * itself is the proof - it was only sent to the invited address.
+	 */
+	public function acceptAsExistingUser(string $acceptToken, string $loggedInUid, bool $confirmedOtherAddress = false): string {
 		try {
 			$member = $this->memberMapper->findByAcceptToken($acceptToken);
 		} catch (DoesNotExistException) {
@@ -272,8 +280,8 @@ class InvitationService {
 			throw new \RuntimeException('Not logged in');
 		}
 		$mine = strtolower((string)$user->getEMailAddress());
-		if ($mine === '' || $mine !== strtolower($member->getInvitationEmail())) {
-			throw new \RuntimeException('This invitation was sent to a different email address than the account you are logged in with.');
+		if (!$confirmedOtherAddress && ($mine === '' || $mine !== strtolower($member->getInvitationEmail()))) {
+			throw new InviteAddressMismatchException('The invitation was sent to another e-mail address than the one of your account.');
 		}
 		$gid   = $member->getGid();
 		$email = $member->getInvitationEmail();

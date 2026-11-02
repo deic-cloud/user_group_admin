@@ -17,6 +17,6 @@
 .uga-signup-wrap { max-width: 400px; margin: 0 auto; padding: 2em 1em; }
 .uga-signup-wrap h2 { font-size: 1.5em; margin-bottom: 0.5em; }
 .uga-signup-wrap p { margin: 0.5em 0; }
-.uga-signup-error { color: var(--color-error); margin: 1em 0; }
+.uga-signup-error { color: var(--color-error-text); font-weight: bold; margin: 1em 0; }
 .uga-signup-submit { display: inline-flex; margin-top: 1.5em; justify-content: center; }
 </style>

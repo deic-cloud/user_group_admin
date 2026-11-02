@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\UserGroupAdmin\Controller;
 
+use OCA\UserGroupAdmin\Exception\InviteAddressMismatchException;
 use OCA\UserGroupAdmin\Service\InvitationService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -96,11 +97,45 @@ class SignupController extends Controller {
 			$target = $this->urlGenerator->linkToRoute('user_group_admin.page.index')
 				. '?group=' . urlencode($gid);
 			return new RedirectResponse($target);
+		} catch (InviteAddressMismatchException) {
+			// Invited at another of the user's addresses: ask before joining.
+			$info = $this->invitationService->describeInvite($token);
+			if ($info === null) {
+				return new TemplateResponse('user_group_admin', 'signup_invalid', [], 'guest');
+			}
+			$user = $this->userSession->getUser();
+			return new TemplateResponse('user_group_admin', 'signup_confirm', [
+				'token'   => $token,
+				'email'   => $info['email'],
+				'gid'     => $info['gid'],
+				'owner'   => $info['owner'],
+				'account' => $user->getDisplayName() === $uid ? $uid : $user->getDisplayName() . ' (' . $uid . ')',
+				'joinUrl' => $this->urlGenerator->linkToRoute('user_group_admin.signup.acceptAsUserConfirmed'),
+			], 'guest');
 		} catch (\RuntimeException $e) {
 			$info = $this->invitationService->describeInvite($token);
 			if ($info !== null) {
 				return $this->loginToAccept($token, $info, $e->getMessage());
 			}
+			return new TemplateResponse('user_group_admin', 'signup_invalid', [], 'guest');
+		}
+	}
+
+	/**
+	 * The "Join" button of the confirmation page: accept an invitation sent to
+	 * another address than the account's. CSRF-protected (POST with request token).
+	 */
+	#[NoAdminRequired]
+	public function acceptAsUserConfirmed(string $token = ''): TemplateResponse|RedirectResponse {
+		$uid = $this->userSession->getUser()?->getUID() ?? '';
+		if ($uid === '') {
+			return $this->acceptAsUser($token);
+		}
+		try {
+			$gid = $this->invitationService->acceptAsExistingUser($token, $uid, true);
+			return new RedirectResponse($this->urlGenerator->linkToRoute('user_group_admin.page.index')
+				. '?group=' . urlencode($gid));
+		} catch (\RuntimeException) {
 			return new TemplateResponse('user_group_admin', 'signup_invalid', [], 'guest');
 		}
 	}
