@@ -27,6 +27,9 @@
 	<background-jobs>
 		<job>OCA\UserGroupAdmin\BackgroundJob\GrantFolderUsage</job>
 	</background-jobs>
+	<commands>
+		<command>OCA\UserGroupAdmin\Command\MigrateGroups</command>
+	</commands>
 	<remote>
 		<groupadmin>appinfo/remote.php</groupadmin>
 		<user_group_admin>appinfo/grants.php</user_group_admin>
