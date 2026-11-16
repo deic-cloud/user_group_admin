@@ -199,7 +199,7 @@ class InternalController extends Controller {
 
 		$this->memberMapper->deleteByGidUid($gid, $uid);
 		$ncGroup = $this->groupManager->get($gid);
-		$user    = $this->userManager->get($uid);
+		$user    = $this->localUser($uid);
 		if ($ncGroup !== null && $user !== null) {
 			$ncGroup->removeUser($user);
 		}
@@ -237,7 +237,7 @@ class InternalController extends Controller {
 			$this->storeContactDetails($user, $address, $affiliation);
 		}
 
-		if ($owner !== '' && $this->userManager->get($owner) !== null) {
+		if ($owner !== '' && $this->localUser($owner) !== null) {
 			$n = $this->notificationManager->createNotification();
 			$n->setApp('user_group_admin')
 				->setUser($owner)
@@ -321,7 +321,7 @@ class InternalController extends Controller {
 				return $this->shardingService->isSelf($server);
 			}
 		}
-		return $this->userManager->get($uid) !== null;
+		return $this->localUser($uid) !== null;
 	}
 
 	/**
@@ -396,6 +396,17 @@ class InternalController extends Controller {
 	}
 
 	/** Reconcile NC's built-in group membership with our uga_group_members table. */
+	/**
+	 * The local account with exactly this uid. IUserManager::get() falls back
+	 * to the e-mail address, so a member pushed from another node as
+	 * fror@dtu.dk would otherwise resolve to a local fror@deic.dk whose
+	 * e-mail is fror@dtu.dk.
+	 */
+	private function localUser(string $uid): ?IUser {
+		$user = $this->userManager->get($uid);
+		return $user !== null && strcasecmp($user->getUID(), $uid) === 0 ? $user : null;
+	}
+
 	private function syncNcGroupMembers(string $gid): void {
 		$ncGroup = $this->groupManager->get($gid);
 		if ($ncGroup === null) return;
@@ -409,7 +420,7 @@ class InternalController extends Controller {
 		);
 
 		foreach ($acceptedUids as $uid) {
-			$user = $this->userManager->get($uid);
+			$user = $this->localUser($uid);
 			if ($user !== null && !$ncGroup->inGroup($user)) {
 				$ncGroup->addUser($user);
 			}

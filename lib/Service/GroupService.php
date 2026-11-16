@@ -12,6 +12,7 @@ use OCA\UserGroupAdmin\Db\GroupMemberMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\Activity\IManager as IActivityManager;
 use OCP\IGroupManager;
+use OCP\IUser;
 use OCP\IUserManager;
 use OCP\Notification\IManager as INotificationManager;
 use Psr\Log\LoggerInterface;
@@ -245,7 +246,7 @@ class GroupService {
 		if ($targetUid === $group->getOwner()) {
 			throw new \RuntimeException('The group owner cannot be disabled');
 		}
-		$user = $this->userManager->get($targetUid);
+		$user = $this->localUser($targetUid);
 		if ($user === null) {
 			throw new \RuntimeException('User not found');
 		}
@@ -356,7 +357,7 @@ class GroupService {
 		if ($committed <= 0) {
 			return null;
 		}
-		$user = $this->userManager->get($newOwnerUid);
+		$user = $this->localUser($newOwnerUid);
 		if ($user === null) {
 			return null; // cross-silo / unknown quota — can't compare (soft check only)
 		}
@@ -452,7 +453,7 @@ class GroupService {
 		} catch (DoesNotExistException) {
 			$this->addMember($gid, $newOwnerUid, GroupMember::STATUS_ACCEPTED);
 		}
-		$u = $this->userManager->get($newOwnerUid);
+		$u = $this->localUser($newOwnerUid);
 		if ($u !== null) {
 			$this->groupManager->get($gid)?->addUser($u);
 		}
@@ -475,7 +476,7 @@ class GroupService {
 					$owner = $this->groupMapper->findByGid($domain)->getOwner();
 					if ($owner !== '' && $owner !== Group::HIDDEN_OWNER
 						&& $owner !== $departingUid
-						&& $this->userManager->get($owner) !== null) {
+						&& $this->localUser($owner) !== null) {
 						return $owner;
 					}
 				} catch (DoesNotExistException) {}
@@ -522,7 +523,7 @@ class GroupService {
 		} elseif ($group->getOpen()) {
 			// Open group: anyone can join immediately.
 			$m = $this->addMember($gid, $callerUid, GroupMember::STATUS_ACCEPTED);
-			$user = $this->userManager->get($callerUid);
+			$user = $this->localUser($callerUid);
 			if ($user !== null) {
 				$this->groupManager->get($gid)?->addUser($user);
 			}
@@ -561,7 +562,7 @@ class GroupService {
 		$member->setDeclineToken('');
 		$this->memberMapper->update($member);
 
-		$user = $this->userManager->get($targetUid);
+		$user = $this->localUser($targetUid);
 		if ($user !== null) {
 			$this->groupManager->get($gid)?->addUser($user);
 		}
@@ -614,7 +615,7 @@ class GroupService {
 		}
 
 		$this->memberMapper->deleteByGidUid($gid, $targetUid);
-		$user = $this->userManager->get($targetUid);
+		$user = $this->localUser($targetUid);
 		if ($user !== null) {
 			$this->groupManager->get($gid)?->removeUser($user);
 		}
@@ -753,7 +754,16 @@ class GroupService {
 				return $this->shardingService->isSelf($server);
 			}
 		}
-		return $this->userManager->get($uid) !== null;
+		return $this->localUser($uid) !== null;
+	}
+
+	/**
+	 * The local account with exactly this uid; IUserManager::get() falls back
+	 * to the e-mail address (fror@dtu.dk -> fror@deic.dk).
+	 */
+	private function localUser(string $uid): ?IUser {
+		$user = $this->userManager->get($uid);
+		return $user !== null && strcasecmp($user->getUID(), $uid) === 0 ? $user : null;
 	}
 
 	private function publishActivity(string $subject, array $params, string $author, string ...$affectedUsers): void {

@@ -188,7 +188,8 @@ class GroupSyncService {
 			return $this->dnCache[$uid];
 		}
 		$local = $this->userManager->get($uid);
-		if ($local !== null) {
+		// get() falls back to the e-mail address; only the exact account counts.
+		if ($local !== null && strcasecmp($local->getUID(), $uid) === 0) {
 			return $this->dnCache[$uid] = $local->getDisplayName();
 		}
 		$name = $uid;

@@ -164,7 +164,8 @@ class GroupBackend extends ABackend implements
 		$result = [];
 		foreach ($uids as $uid) {
 			$user = $this->userManager->get($uid);
-			if ($user !== null) {
+			// get() falls back to the e-mail address; keep only the exact account.
+			if ($user !== null && strcasecmp($user->getUID(), $uid) === 0) {
 				$result[$uid] = $user;
 			}
 		}
