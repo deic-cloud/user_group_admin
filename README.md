@@ -135,7 +135,6 @@ When a group or membership changes, the app's `GroupSyncService` propagates it t
 | `hidden` | bool | Hidden system group (e.g. per-domain billing groups) |
 | `storage_grant` | varchar | Per-member grant size (e.g. `10 GB`; empty = none) |
 | `storage_grant_total` | varchar | Committed-pool cap for the whole group (empty = no pool cap) |
-| `grant_sync_hide` | bool | Hide the grant folder from desktop sync clients |
 | `pending_owner` | varchar | Proposed new owner awaiting consent during a transfer (empty = none) |
 
 **`uga_group_members`** (unique on `(gid, uid)`)
@@ -165,7 +164,7 @@ All endpoints under `/ocs/v2.php/apps/user_group_admin/api/v1/`. Authentication 
 | `GET` | `/invitations` | The caller's pending invitations |
 | `POST` | `/groups` | Create a group |
 | `GET` | `/groups/{gid}` | Group details |
-| `PUT` | `/groups/{gid}` | Update settings (description, visibility, storage grant, sync-hide) |
+| `PUT` | `/groups/{gid}` | Update settings (description, visibility, storage grant) |
 | `DELETE` | `/groups/{gid}` | Delete a group (owner only) |
 | `GET` | `/groups/{gid}/members` | List members (with resolved display names) |
 | `POST` | `/groups/{gid}/members` | Invite/add an existing user, or request to join |

@@ -20,8 +20,11 @@ interface IShardingAdapter {
 	public function setUserServer(string $uid, int $serverId): void;
 
 	/**
-	 * Ensure the .uga_grants sync-hide rule exists (hide=true) or is removed
-	 * (hide=false) for the given user in the folder-visibility system.
+	 * Remove the locked grant-folder rules this app used to write into
+	 * members' folder visibility settings. Grant folders are always kept from
+	 * WebDAV clients on the default endpoint (they have their own), so the
+	 * rules - and the group setting that wrote them - were redundant.
+	 * Returns the number of rules removed.
 	 */
-	public function setGrantSyncHide(string $uid, bool $hide): void;
+	public function removeGrantSyncRules(): int;
 }

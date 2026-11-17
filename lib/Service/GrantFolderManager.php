@@ -86,7 +86,6 @@ class GrantFolderManager {
 			$dirty = true;
 		}
 
-		$anySyncHide = false;
 
 		foreach ($groups as $group) {
 			$gid  = $group->getGid();
@@ -112,9 +111,6 @@ class GrantFolderManager {
 				$this->logger->info('user_group_admin: created grant folder ' . $path);
 			}
 
-			if ($group->getGrantSyncHide()) {
-				$anySyncHide = true;
-			}
 		}
 
 		// The folders were created with raw mkdir()/rename() on disk, so they're absent
@@ -129,8 +125,6 @@ class GrantFolderManager {
 				$this->logger->warning('user_group_admin: failed to scan grant folders for ' . $uid . ': ' . $e->getMessage());
 			}
 		}
-
-		$this->shardingAdapter->setGrantSyncHide($uid, $anySyncHide);
 
 		// Sponsored-folders system shares: each member's grant folder is shared
 		// (read-only, app-managed) with the group OWNER — "in principle just a

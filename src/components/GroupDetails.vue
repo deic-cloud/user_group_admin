@@ -125,11 +125,6 @@
 				:options="quotaTotalOptions"
 				:input-label="t('user_group_admin', 'Total quota (all members)')" />
 
-			<NcCheckboxRadioSwitch v-model="editGrantSyncHide">
-				{{ t('user_group_admin', 'Hide grant folder from sync clients') }}
-			</NcCheckboxRadioSwitch>
-			<p class="uga-hint">{{ t('user_group_admin', 'When checked, desktop sync clients cannot see or sync the grant folder. Members see a locked entry in their folder visibility settings.') }}</p>
-
 			<h3>{{ t('user_group_admin', 'Home-directory top-up') }}</h3>
 			<p class="uga-hint">
 				{{ t('user_group_admin', 'Allocate extra free quota on your members\' own home directories, drawn from your own quota. Independent of the grant folder above.') }}
@@ -227,7 +222,6 @@ const editOpen              = ref(false)
 const editPrivate           = ref(false)
 const editStorageGrant      = ref('none')
 const editStorageGrantTotal = ref('none')
-const editGrantSyncHide     = ref(true)
 const editTopup             = ref('')
 const pendingOwner          = ref('')
 const transferUser          = ref(null)
@@ -284,7 +278,6 @@ async function loadGroup() {
 	editStorageGrant.value = quotaOptions.find(o => o.id === grantId) ?? quotaOptions.at(-1)
 	const totalId = g.storage_grant_total || 'none'
 	editStorageGrantTotal.value = quotaTotalOptions.find(o => o.id === totalId) ?? quotaTotalOptions.at(-1)
-	editGrantSyncHide.value = g.grant_sync_hide !== false
 	pendingOwner.value      = g.pending_owner ?? ''
 	groupCommitted.value    = g.storage_grant_total ?? ''
 
@@ -448,7 +441,6 @@ async function saveSettings() {
 			private:             editPrivate.value,
 			storage_grant:       grantVal      === 'none' ? '' : (grantVal ?? ''),
 			storage_grant_total: grantTotalVal === 'none' ? '' : (grantTotalVal ?? ''),
-			grant_sync_hide:     editGrantSyncHide.value,
 		}, { headers: { 'OCS-APIREQUEST': 'true' } })
 		// Save the home-directory top-up via files_accounting (owner self-service).
 		try {

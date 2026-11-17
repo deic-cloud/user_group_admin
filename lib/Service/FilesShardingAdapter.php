@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace OCA\UserGroupAdmin\Service;
 
-use OCA\FilesSharding\Db\DataFolderMapper;
 use OCA\FilesSharding\Service\ShardingService;
+use OCP\DB\QueryBuilder\IQueryBuilder;
+use OCP\IDBConnection;
 
 /** Thin wrapper around ShardingService when files_sharding is installed. */
 class FilesShardingAdapter implements IShardingAdapter {
@@ -17,7 +18,7 @@ class FilesShardingAdapter implements IShardingAdapter {
 
 	public function __construct(
 		private ShardingService  $service,
-		private DataFolderMapper $folderMapper,
+		private IDBConnection $db,
 	) {}
 
 	public function isMaster(): bool                      { return $this->service->isMaster(); }
@@ -29,12 +30,12 @@ class FilesShardingAdapter implements IShardingAdapter {
 	public function getUserServer(string $uid): mixed      { return $this->service->getUserServer($uid); }
 	public function setUserServer(string $uid, int $serverId): void { $this->service->setUserServer($uid, $serverId); }
 
-	public function setGrantSyncHide(string $uid, bool $hide): void {
-		$this->folderMapper->deleteLockedRule($uid, self::LEGACY_GRANT_FOLDER, self::LOCKED_BY);
-		if ($hide) {
-			$this->folderMapper->upsertLockedRule($uid, self::GRANT_FOLDER, true, self::LOCKED_BY);
-		} else {
-			$this->folderMapper->deleteLockedRule($uid, self::GRANT_FOLDER, self::LOCKED_BY);
-		}
+	public function removeGrantSyncRules(): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete('files_sharding_folders')
+			->where($qb->expr()->eq('locked_by', $qb->createNamedParameter(self::LOCKED_BY)))
+			->andWhere($qb->expr()->in('folder', $qb->createNamedParameter(
+				[self::GRANT_FOLDER, self::LEGACY_GRANT_FOLDER], IQueryBuilder::PARAM_STR_ARRAY)));
+		return $qb->executeStatement();
 	}
 }

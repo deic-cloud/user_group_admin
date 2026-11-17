@@ -39,7 +39,7 @@ class Group extends Entity {
 	protected bool   $hidden            = false;
 	protected string $storageGrant      = '';
 	protected string $storageGrantTotal = '';
-	protected bool   $grantSyncHide     = true;
+	protected bool   $grantSyncHide     = true; // unused since 1.0.51 (grant folders are always hidden from sync clients); column kept
 	protected string $pendingOwner      = '';
 
 	public function __construct() {
@@ -59,7 +59,6 @@ class Group extends Entity {
 			'hidden'              => $this->hidden,
 			'storage_grant'       => $this->storageGrant,
 			'storage_grant_total' => $this->storageGrantTotal,
-			'grant_sync_hide'     => $this->grantSyncHide,
 			'pending_owner'       => $this->pendingOwner,
 		];
 	}

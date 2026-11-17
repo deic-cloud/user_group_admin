@@ -60,7 +60,7 @@ class Application extends App implements IBootstrap {
 			if ($c->get(IAppManager::class)->isInstalled('files_sharding')) {
 				return new FilesShardingAdapter(
 					$c->get(\OCA\FilesSharding\Service\ShardingService::class),
-					$c->get(\OCA\FilesSharding\Db\DataFolderMapper::class),
+					$c->get(\OCP\IDBConnection::class),
 				);
 			}
 			return new StandaloneShardingAdapter();

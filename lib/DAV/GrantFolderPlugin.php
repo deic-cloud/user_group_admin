@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace OCA\UserGroupAdmin\DAV;
 
-use OCA\UserGroupAdmin\Db\GroupMapper;
 use OCA\UserGroupAdmin\Service\GrantFolderManager;
 use OCP\IRequest;
 use Sabre\DAV\Exception\Forbidden;
@@ -20,15 +19,14 @@ use Sabre\HTTP\ResponseInterface;
  * 1. Blocks manual MKCOL/PUT/COPY of the .uga_grants parent directory itself
  *    (subfolders and files within it are allowed).
  *
- * 2. When files_sharding is NOT installed: enforces sync-hide server-side by
- *    returning 404 to sync clients for any path inside .uga_grants when the
- *    relevant group has grantSyncHide=true.
+ * 2. When files_sharding is NOT installed: keeps grant folders from sync
+ *    clients by returning 404 for any path inside .uga_grants (with
+ *    files_sharding, its conceal wrapper hides them from all WebDAV clients).
  */
 class GrantFolderPlugin extends ServerPlugin {
 	private const SYNC_CLIENT_RE = '/(?:mirall|ownCloudSync)\//i';
 
 	public function __construct(
-		private GroupMapper $groupMapper,
 		private IRequest    $ncRequest,
 		private bool        $filesShardingActive,
 	) {}
@@ -65,17 +63,8 @@ class GrantFolderPlugin extends ServerPlugin {
 			return;
 		}
 
-		$uid = $m[1];
-		try {
-			$groups = $this->groupMapper->findGrantGroupsForMember($uid);
-		} catch (\Throwable) {
-			return;
-		}
-
-		foreach ($groups as $group) {
-			if ($group->getGrantSyncHide()) {
-				throw new NotFound('Folder not accessible from sync clients');
-			}
-		}
+		// Grant folders never go to sync clients: their data is the group
+		// owner's, not something to leave on a laptop
+		throw new NotFound('Folder not accessible from sync clients');
 	}
 }
