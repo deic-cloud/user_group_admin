@@ -358,7 +358,6 @@ class InternalController extends Controller {
 		$group->setHidden((bool)($data['hidden'] ?? false));
 		$group->setStorageGrant($data['storage_grant'] ?? '');
 		$group->setStorageGrantTotal($data['storage_grant_total'] ?? '');
-		$group->setGrantSyncHide((bool)($data['grant_sync_hide'] ?? true));
 		$group->setPendingOwner($data['pending_owner'] ?? '');
 
 		if ($isNew) {

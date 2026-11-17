@@ -23,8 +23,6 @@ use OCP\AppFramework\Db\Entity;
  * @method void   setStorageGrant(string $storageGrant)
  * @method string getStorageGrantTotal()
  * @method void   setStorageGrantTotal(string $storageGrantTotal)
- * @method bool   getGrantSyncHide()
- * @method void   setGrantSyncHide(bool $grantSyncHide)
  * @method string getPendingOwner()
  * @method void   setPendingOwner(string $pendingOwner)
  */
@@ -39,14 +37,12 @@ class Group extends Entity {
 	protected bool   $hidden            = false;
 	protected string $storageGrant      = '';
 	protected string $storageGrantTotal = '';
-	protected bool   $grantSyncHide     = true; // unused since 1.0.51 (grant folders are always hidden from sync clients); column kept
 	protected string $pendingOwner      = '';
 
 	public function __construct() {
 		$this->addType('private',       'boolean');
 		$this->addType('open',          'boolean');
 		$this->addType('hidden',        'boolean');
-		$this->addType('grantSyncHide', 'boolean');
 	}
 
 	public function toArray(): array {

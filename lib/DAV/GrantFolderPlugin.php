@@ -46,7 +46,7 @@ class GrantFolderPlugin extends ServerPlugin {
 
 	/**
 	 * When files_sharding is absent: block sync clients from accessing
-	 * .uga_grants if any of the user's grant groups has grantSyncHide=true.
+	 * .uga_grants (grant folders never go to sync clients).
 	 */
 	public function beforeMethod(RequestInterface $request, ResponseInterface $response): void {
 		if ($this->filesShardingActive) {
