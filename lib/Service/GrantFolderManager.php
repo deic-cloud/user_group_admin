@@ -47,7 +47,14 @@ class GrantFolderManager {
 	) {}
 
 	public function ensureGrantFolders(string $uid): void {
-		$dataDir = rtrim((string) $this->config->getSystemValue('datadirectory', ''), '/');
+		// A grant folder lives on its member's home node only. Others do log in
+		// on the master too (e.g. authorizing a login there, as its OpenID
+		// Connect provider): no folder there, which would be a ghost - and its
+		// sponsor share a second, visible one to the owner.
+		if (!$this->isUserLocal($uid)) {
+			return;
+		}
+		$dataDir =rtrim((string) $this->config->getSystemValue('datadirectory', ''), '/');
 		if ($dataDir === '') {
 			$this->logger->warning('user_group_admin: datadirectory not configured');
 			return;
