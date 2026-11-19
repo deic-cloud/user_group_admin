@@ -480,8 +480,10 @@ try {
 			id:            SPONSORED_ID,
 			name:          t('user_group_admin', 'Sponsored folders'),
 			caption:       t('user_group_admin', 'Grant folders you sponsor (read-only)'),
-			emptyTitle:    t('user_group_admin', 'No sponsored folders'),
-			emptyCaption:  t('user_group_admin', 'Grant folders of groups you sponsor appear here.'),
+			// only registered when something is sponsored: an empty listing is a
+			// member's (sub)folder, never the view itself
+			emptyTitle:    t('user_group_admin', 'No files'),
+			emptyCaption:  t('user_group_admin', 'This folder is empty.'),
 			icon:          BinocularsSvg,
 			order:         50,
 			parent:        'shareoverview', // files_sharing's Shares section (sharesViewId)
