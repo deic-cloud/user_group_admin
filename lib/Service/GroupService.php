@@ -639,6 +639,56 @@ class GroupService {
 		}
 	}
 
+	/**
+	 * The group's owner invites the members of other groups - groups of their own
+	 * list (owned or a member of, not hidden: never a whole institution). Only
+	 * accepted members, and only people with no membership of $gid at all:
+	 * members, pending invitations, requests and those who declined are left
+	 * alone. Everyone else gets the usual invitation and becomes a member only by
+	 * accepting it (Frederik: no change to anyone's groups without their consent).
+	 *
+	 * @param string[] $sourceGids
+	 * @return array{invited: int, skipped: int}
+	 */
+	public function inviteMembersOf(string $callerUid, string $gid, array $sourceGids): array {
+		$this->getGroupForOwner($callerUid, $gid);
+		$mine = [];
+		foreach ($this->listGroupsForUser($callerUid) as $g) {
+			$mine[$g->getGid()] = true;
+		}
+		$candidates = [];
+		foreach (array_unique(array_map('strval', $sourceGids)) as $src) {
+			if ($src === $gid || !isset($mine[$src])) {
+				throw new \RuntimeException("You can only invite the members of your own groups: $src");
+			}
+			foreach ($this->memberMapper->findByGid($src) as $m) {
+				if ($m->getStatus() === GroupMember::STATUS_ACCEPTED && $m->getUid() !== GroupMember::EXTERNAL_UID
+						&& $m->getUid() !== $callerUid) {
+					$candidates[$m->getUid()] = true;
+				}
+			}
+		}
+		$present = [];
+		foreach ($this->memberMapper->findByGid($gid) as $m) {
+			$present[$m->getUid()] = true;
+		}
+		$invited = 0;
+		$skipped = 0;
+		foreach (array_keys($candidates) as $uid) {
+			if (isset($present[$uid])) {
+				$skipped++;
+				continue;
+			}
+			try {
+				$this->inviteOrRequest($callerUid, $gid, (string)$uid);
+				$invited++;
+			} catch (\Throwable $e) {
+				$skipped++;
+			}
+		}
+		return ['invited' => $invited, 'skipped' => $skipped];
+	}
+
 	/** @return Group[] groups owned by or with accepted membership for $uid */
 	public function listGroupsForUser(string $uid): array {
 		$owned   = $this->groupMapper->findByOwner($uid);

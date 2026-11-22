@@ -92,6 +92,23 @@
 					</NcButton>
 				</div>
 				<p v-if="inviteError" class="uga-error">{{ inviteError }}</p>
+
+				<template v-if="sourceGroupOptions.length">
+					<h3>{{ t('user_group_admin', 'Invite the members of other groups') }}</h3>
+					<p class="uga-hint">{{ t('user_group_admin', 'Everyone in the groups you choose gets an invitation to this group and becomes a member by accepting it. People already in this group, or already invited, are left out.') }}</p>
+					<div class="uga-add-member">
+						<NcSelect v-model="sourceGroups"
+							:options="sourceGroupOptions"
+							:multiple="true"
+							:input-label="t('user_group_admin', 'Your groups')"
+							:placeholder="t('user_group_admin', 'Choose one or more groups')"
+							class="uga-user-field" />
+						<NcButton :disabled="!sourceGroups.length || invitingGroups" @click="inviteGroups">
+							{{ t('user_group_admin', 'Invite their members') }}
+						</NcButton>
+					</div>
+					<p v-if="inviteGroupsResult" class="uga-hint">{{ inviteGroupsResult }}</p>
+				</template>
 			</template>
 
 			<div v-if="!isOwner && !invited" class="uga-leave">
@@ -295,6 +312,42 @@ async function loadGroup() {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const inviteQuery = ref('')
+
+// Inviting the members of other groups (the owner's own, hidden ones excluded)
+const sourceGroups       = ref([])
+const sourceGroupOptions = ref([])
+const invitingGroups     = ref(false)
+const inviteGroupsResult = ref('')
+
+async function loadSourceGroups() {
+	if (!props.isOwner) return
+	try {
+		const { data } = await axios.get(`${OCS}/groups`, { headers: { 'OCS-APIREQUEST': 'true' } })
+		sourceGroupOptions.value = (data.ocs?.data ?? [])
+			.filter(g => g.gid !== props.gid && !g.hidden)
+			.map(g => ({ id: g.gid, label: g.gid }))
+	} catch (e) { sourceGroupOptions.value = [] }
+}
+
+async function inviteGroups() {
+	invitingGroups.value = true
+	inviteGroupsResult.value = ''
+	try {
+		const { data } = await axios.post(
+			`${OCS}/groups/${encodeURIComponent(props.gid)}/members/groups`,
+			{ sources: sourceGroups.value.map(o => o.id) },
+			{ headers: { 'OCS-APIREQUEST': 'true' } },
+		)
+		const r = data.ocs?.data ?? {}
+		inviteGroupsResult.value = t('user_group_admin', '{invited} invited; {skipped} already in this group or invited.', { invited: r.invited ?? 0, skipped: r.skipped ?? 0 })
+		sourceGroups.value = []
+		loadMembers()
+	} catch (e) {
+		inviteGroupsResult.value = e.response?.data?.ocs?.meta?.message ?? t('user_group_admin', 'Invitation failed')
+	} finally {
+		invitingGroups.value = false
+	}
+}
 
 function isValidEmail(v) { return EMAIL_RE.test(v ?? '') }
 
@@ -530,7 +583,7 @@ watch(() => props.invited, (now, was) => {
 	}
 })
 
-onMounted(() => { loadMembers(); loadGroup() })
+onMounted(() => { loadMembers(); loadGroup(); loadSourceGroups() })
 </script>
 
 <style scoped>

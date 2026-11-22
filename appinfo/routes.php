@@ -42,6 +42,7 @@ return [
 		['name' => 'group#listMembers',      'url' => '/api/v1/groups/{gid}/members',          'verb' => 'GET'],
 		['name' => 'group#inviteOrRequest',  'url' => '/api/v1/groups/{gid}/members',          'verb' => 'POST'],
 		['name' => 'group#inviteExternal',   'url' => '/api/v1/groups/{gid}/members/external', 'verb' => 'POST'],
+		['name' => 'group#inviteGroups',     'url' => '/api/v1/groups/{gid}/members/groups',   'verb' => 'POST'],
 		['name' => 'group#acceptMembership', 'url' => '/api/v1/groups/{gid}/members/{uid}',    'verb' => 'PUT'],
 		['name' => 'group#removeMember',     'url' => '/api/v1/groups/{gid}/members/{uid}',    'verb' => 'DELETE'],
 		['name' => 'group#listMembersPlain', 'url' => '/api/v1/groups/{gid}/members/plain',    'verb' => 'GET'],

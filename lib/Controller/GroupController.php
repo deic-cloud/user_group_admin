@@ -138,6 +138,16 @@ class GroupController extends OCSController {
 		return $this->ok(array_map(fn ($m) => $this->withMemberName($m->toArray()), $members));
 	}
 
+	/** Invite the members of other groups of the owner's (each gets the usual invitation). */
+	#[NoAdminRequired]
+	public function inviteGroups(string $gid, array $sources = []): DataResponse {
+		try {
+			return $this->ok($this->groupService->inviteMembersOf($this->uid(), $gid, $sources));
+		} catch (\RuntimeException $e) {
+			return $this->err($e->getMessage());
+		}
+	}
+
 	/** Invite an existing NC user or request to join an open group. */
 	#[NoAdminRequired]
 	public function inviteOrRequest(string $gid, string $uid): DataResponse {
